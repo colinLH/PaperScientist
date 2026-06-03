@@ -1,0 +1,8 @@
+[
+  {
+    "step": 1,
+    "name": "mysql_query",
+    "tool_call_id": "call_00_Bvssqbc661poM8ZkpmmB2571",
+    "content": "| id | title | year | publish | category |\n| --- | --- | --- | --- | --- |\n| 72 | Oreo: Protecting ASLR Against Microarchitectural Attacks | 2025 | NDSS Symposium 2025 | ASLR Defense & Address Space Probing Mitigation |\n| 73 | OCCUPY+PROBE: Cross-Privilege Branch Target Buffer Side-Channel Attacks at Instruction Granularity | 2026 | NDSS Symposium 2026 (Distinguished Paper Award) | Address Space Probing Attack — KASLR Breach |\n| 74 | Demystifying and Exploiting ASLR on NVIDIA GPUs | 2026 | IEEE S&P 2026 (Distinguished Paper Award) | Address Space Probing Attack — GPU ASLR Exploitation |\n| 75 | PROBE+DETECT+MITIGATE (PDM): Enabling Cloud Tenants to Self-Defend against Microarchitectural Attacks | 2026 | USENIX Security Symposium 2026 | Address Space Probing Defense — Cloud Tenant Self-Defense |\n| 76 | Peek-a-Walk: Leaking Secrets via Page Walk Side Channels | 2025 | IEEE S&P 2025 | Address Space Probing Attack — Page Walk Side Channel |\n\n_5 row(s) returned._"
+  }
+]

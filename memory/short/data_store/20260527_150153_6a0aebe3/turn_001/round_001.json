@@ -1,0 +1,18 @@
+{
+  "session_id": "20260527_150153_6a0aebe3",
+  "turn": 1,
+  "timestamp": "2026-05-27T15:02:57.527441",
+  "round": 1,
+  "has_tool_calls": true,
+  "content": "",
+  "tool_calls": [
+    {
+      "step": 1,
+      "name": "mysql_query",
+      "args": {
+        "sql": "SELECT * FROM `agentdb`.`paper` LIMIT 10;",
+        "limit": 10
+      }
+    }
+  ]
+}

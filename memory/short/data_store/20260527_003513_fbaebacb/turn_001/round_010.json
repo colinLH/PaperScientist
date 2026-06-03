@@ -1,0 +1,17 @@
+{
+  "session_id": "20260527_003513_fbaebacb",
+  "turn": 1,
+  "timestamp": "2026-05-27T00:36:51.853332",
+  "round": 10,
+  "has_tool_calls": true,
+  "content": "Now let me verify everything was inserted correctly.",
+  "tool_calls": [
+    {
+      "step": 1,
+      "name": "mysql_query",
+      "args": {
+        "sql": "SELECT p.id, p.title, p.year, p.method, p.publish, p.category, c.link\nFROM paper p\nLEFT JOIN code c ON p.code_id = c.id\nWHERE p.title IN (\n    'FirmAgent: Leveraging Fuzzing to Assist LLM Agents with IoT Firmware Vulnerability Discovery',\n    'PANGOLIN: Fuzzing Multilingual IoT Firmware with LLM-Driven Code Analysis',\n    'IoTBec: An Accurate and Efficient Recurring Vulnerability Detection Framework for Black Box IoT Devices',\n    'ChatHTTPFuzz: Large Language Model-Assisted IoT HTTP Fuzzing',\n    'Energy-Efficient Multi-LLM Reasoning for Binary-Free Zero-Day Detection in IoT Firmware'\n)\nORDER BY p.id;"
+      }
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+[
+  {
+    "step": 1,
+    "name": "mysql_query",
+    "tool_call_id": "call_00_xZrnBLWU2K0ekDnjwdt60336",
+    "content": "| title |\n| --- |\n| PANGOLIN: Fuzzing Multilingual IoT Firmware with LLM-Driven Code Analysis |\n| FirmAgent: Leveraging Fuzzing to Assist LLM Agents with IoT Firmware Vulnerability Discovery |\n| Energy-Efficient Multi-LLM Reasoning for Binary-Free Zero-Day Detection in IoT Firmware |\n\n_3 row(s) returned._"
+  }
+]

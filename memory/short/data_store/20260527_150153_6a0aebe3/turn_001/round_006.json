@@ -1,0 +1,17 @@
+{
+  "session_id": "20260527_150153_6a0aebe3",
+  "turn": 1,
+  "timestamp": "2026-05-27T15:03:13.958377",
+  "round": 6,
+  "has_tool_calls": true,
+  "content": "Now I have a clear picture. Three papers already exist in the database. The remaining two papers need to be inserted.\n\nLet me now insert the 2 new papers.",
+  "tool_calls": [
+    {
+      "step": 1,
+      "name": "mysql_execute",
+      "args": {
+        "sql": "INSERT INTO `agentdb`.`paper` (`title`, `year`, `method`, `publish`, `category`, `abstract`, `evaluation`) VALUES\n('Automated IoT Firmware Vulnerability Detection using Large Language Models',\n 2025,\n 'Pipeline integrating EMBA (binary identification) + Ghidra (decompilation to pseudo-code) + GPT-based LLM for vulnerability analysis. Pseudo-code is chunked via regex to overcome token limits. LLM agent uses OWASP IoT Security Testing Guide prompts for CWE classification and mitigation suggestions.',\n 'Research Square (Preprint)',\n 'End-to-End LLM Pipeline for Black-Box Firmware Analysis',\n 'This research presents an automated pipeline for black-box IoT firmware vulnerability detection. It integrates EMBA for binary identification and Ghidra for decompilation, then feeds chunked pseudo-code to a GPT-based LLM agent. The LLM is guided by OWASP IoT Security Testing Guide prompts to detect buffer overflows, format string bugs, integer overflows, hardcoded credentials, insecure communications, and command injection, assigning appropriate CWE IDs.',\n 'Tested on Damn Vulnerable Router Firmware, custom vulnerable code, and binaries with known CVEs. The pipeline demonstrates significant improvements in automation, contextual understanding, and scalability compared to traditional approaches, converting manual analysis from days to hours. Successfully detects a broad range of vulnerability types with detailed reporting.'\n),\n('Cracking IoT Security: Can LLMs Outsmart Static Analysis Tools?',\n 2026,\n 'Comparative evaluation of LLMs (Llama 3.1 8B, Llama 70B, GPT-4o, Gemini 2.5 Pro, DeepSeek-R1) vs. symbolic static analysis (oHIT) on smart home IoT rule interaction threats. Tests zero-shot, one-shot, and two-shot settings. Proposes a hybrid oHIT+LLM approach combining symbolic logic with LLM contextual reasoning.',\n 'arXiv Preprint (cs.CR)',\n 'LLM vs. Static Analysis Benchmarking and Hybrid Approach for IoT Rules',\n 'This paper systematically compares LLMs against the symbolic static analysis tool oHIT for detecting interaction threats (RITs) in smart home IoT automation rules (openHAB). It reveals that while LLMs capture semantic intent missed by static tools, they struggle with complex multi-layered contradictions. A hybrid oHIT+LLM approach achieves 93% precision (vs. 73% baseline) by using LLMs as a semantic filter on static analysis outputs.',\n 'LLMs alone achieved limited accuracy (36.55% one-shot, 39.31% two-shot on smaller models). GPT-4o and DeepSeek-R1 showed stronger semantic reasoning. Hybrid oHIT+LLM dramatically improved precision from 73% to 93% overall, and from 17% to 83% for Weak Trigger Cascades. The hybrid approach recovered 100% of true threats while reducing false positives by 20 percentage points.'\n);"
+      }
+    }
+  ]
+}

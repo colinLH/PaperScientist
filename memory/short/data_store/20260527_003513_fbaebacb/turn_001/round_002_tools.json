@@ -1,0 +1,8 @@
+[
+  {
+    "step": 1,
+    "name": "mysql_query",
+    "tool_call_id": "call_00_zXR1bSPQTGJuiWVjcKfG6443",
+    "content": "| title |\n| --- |\n| PANGOLIN: Fuzzing Multilingual IoT Firmware with LLM-Driven Code Analysis |\n| ChatHTTPFuzz: Large Language Model-Assisted IoT HTTP Fuzzing |\n\n_2 row(s) returned._"
+  }
+]

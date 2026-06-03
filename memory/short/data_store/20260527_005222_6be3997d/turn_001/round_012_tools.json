@@ -1,0 +1,8 @@
+[
+  {
+    "step": 1,
+    "name": "mysql_query",
+    "tool_call_id": "call_00_7noeLxIb485XZkoQCmNu5225",
+    "content": "| id | title | year | method | publish | category | code_id |\n| --- | --- | --- | --- | --- | --- | --- |\n| 64 | A Systematic Review of Key Retrieval-Augmented Generation (RAG) Systems: Progress, Gaps, and Future Directions | 2025 | Systematic review – Taxonomy of 100+ RAG systems from Naive RAG to multi-modal RAG | arXiv 2025 | Survey & Taxonomy | None |\n| 63 | Overview of the TREC 2025 Retrieval Augmented Generation (RAG) Track | 2026 | TREC RAG Track – Standardized RAG evaluation with multi-sentence narrative queries, 4 subtasks | TREC 2025 / arXiv 2026 | RAG Benchmarking & Evaluation | 19 |\n| 62 | Parametric Retrieval Augmented Generation | 2025 | Parametric RAG – Document parameterization and parameter-level knowledge injection into FFNs | SIGIR 2025 (Tutorial + Paper Track) | Parametric RAG / Knowledge Injection | 21 |\n| 61 | TS-RAG: Retrieval-Augmented Generation based Time Series Foundation Models are Stronger Zero-Shot Forecaster | 2025 | TS-RAG – Retrieval-augmented time series forecasting with Adaptive Retrieval Mixer (ARM) | NeurIPS 2025 | RAG for Time Series / Cross-domain Adaptation | 18 |\n| 60 | Chain-of-Retrieval Augmented Generation | 2025 | CoRAG – Multi-step iterative retrieval with rejection sampling and test-time scaling | NeurIPS 2025 | Dynamic RAG / Multi-hop Reasoning | 20 |\n\n_5 row(s) returned._"
+  }
+]

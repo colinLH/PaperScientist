@@ -1,0 +1,31 @@
+{
+  "session_id": "20260527_145159_01445262",
+  "turn": 1,
+  "timestamp": "2026-05-27T14:52:11.723675",
+  "round": 2,
+  "has_tool_calls": true,
+  "content": "Let me get more details on the most relevant papers.",
+  "tool_calls": [
+    {
+      "step": 1,
+      "name": "tavily_web_search",
+      "args": {
+        "query": "\"BSFuzzer\" NDSS 2026 Bluetooth fuzzing context-aware semantic"
+      }
+    },
+    {
+      "step": 2,
+      "name": "tavily_web_search",
+      "args": {
+        "query": "\"BLuEMan\" USENIX Security 2025 Bluetooth Low Energy fuzzing framework"
+      }
+    },
+    {
+      "step": 3,
+      "name": "tavily_web_search",
+      "args": {
+        "query": "\"Uncovering Bluetooth vulnerabilities with binary coverage-guided fuzz testing\" 2026 Computers Security"
+      }
+    }
+  ]
+}

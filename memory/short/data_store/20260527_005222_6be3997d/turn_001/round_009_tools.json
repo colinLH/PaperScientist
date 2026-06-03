@@ -1,0 +1,8 @@
+[
+  {
+    "step": 1,
+    "name": "mysql_query",
+    "tool_call_id": "call_00_rTxQ5mToT48YH2mu3NNW4146",
+    "content": "| id | link |\n| --- | --- |\n| 20 | https://openreview.net/forum?id=gUPGGCM4WH |\n| 21 | https://sites.google.com/view/sigir2025-tutorial-dprag/home-page |\n\n_2 row(s) returned._"
+  }
+]

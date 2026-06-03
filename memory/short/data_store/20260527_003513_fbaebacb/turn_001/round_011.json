@@ -1,0 +1,8 @@
+{
+  "session_id": "20260527_003513_fbaebacb",
+  "turn": 1,
+  "timestamp": "2026-05-27T00:36:55.974834",
+  "round": 11,
+  "has_tool_calls": false,
+  "content": "All 5 papers are now in the database. Here is the final summary:\n\n---\n\n## 📚 Summary: Top 5 Papers on LLM-Based Vulnerability Discovery for IoT Devices (2025–2026)\n\n### Insertion Results\n\n**3 new papers inserted (IDs 57, 58, 59):**\n1. **FirmAgent** (NDSS 2026) — Hybrid fuzzing + LLM taint analysis\n2. **IoTBec** (NDSS 2026) — Black-box VIS matching + LLM fuzzing\n3. **Energy-Efficient Multi-LLM** (arXiv 2025) — Binary-free tri-LLM detection\n\n**2 papers already existed (IDs 23, 24):**\n4. **PANGOLIN** (USENIX Security 2026) — Multilingual firmware fuzzing\n5. **ChatHTTPFuzz** (Springer 2025) — LLM-guided HTTP fuzzing\n\n### Research Categories\n\n| Category | Papers | Key Innovation |\n|---|---|---|\n| **Hybrid Fuzzing + LLM Static Analysis** | FirmAgent, PANGOLIN | Combines dynamic fuzzing with LLM code reasoning |\n| **Black-Box LLM-Driven Fuzzing** | IoTBec, ChatHTTPFuzz | No firmware/code access required |\n| **Binary-Free Zero-Day Detection** | Multi-LLM | No binary access, only high-level descriptors |\n\n### Key Takeaways\n- **NDSS & USENIX Security 2026** dominate with 3 top-tier papers\n- **Precision rates** range from 91% (FirmAgent) to 100% (IoTBec)\n- **140+ zero-days** discovered by FirmAgent alone; **169 CVEs** by IoTBec\n- The field is shifting from **LLM-assisted fuzzing** → **LLM agent-driven autonomous vulnerability discovery**"
+}

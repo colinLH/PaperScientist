@@ -1,0 +1,8 @@
+[
+  {
+    "step": 1,
+    "name": "mysql_query",
+    "tool_call_id": "call_00_vNmY1sKCtzBmkdHwY3FO1732",
+    "content": "| id | title | year | publish | category |\n| --- | --- | --- | --- | --- |\n| 70 | Automated IoT Firmware Vulnerability Detection using Large Language Models | 2025 | Research Square (Preprint) | End-to-End LLM Pipeline for Black-Box Firmware Analysis |\n| 71 | Cracking IoT Security: Can LLMs Outsmart Static Analysis Tools? | 2026 | arXiv Preprint (cs.CR) | LLM vs. Static Analysis Benchmarking and Hybrid Approach for IoT Rules |\n\n_2 row(s) returned._"
+  }
+]

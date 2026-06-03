@@ -1,0 +1,15 @@
+{
+  "session_id": "20260529_140915_2cdd5031",
+  "turn": 1,
+  "timestamp": "2026-05-29T14:10:20.585336",
+  "round": 1,
+  "has_tool_calls": true,
+  "content": "Now let me check the database for any existing records.",
+  "tool_calls": [
+    {
+      "step": 1,
+      "name": "mysql_list_tables",
+      "args": {}
+    }
+  ]
+}

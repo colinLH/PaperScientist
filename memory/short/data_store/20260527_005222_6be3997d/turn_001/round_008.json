@@ -1,0 +1,17 @@
+{
+  "session_id": "20260527_005222_6be3997d",
+  "turn": 1,
+  "timestamp": "2026-05-27T00:53:22.969023",
+  "round": 8,
+  "has_tool_calls": true,
+  "content": "Let me insert these code links too:",
+  "tool_calls": [
+    {
+      "step": 1,
+      "name": "mysql_execute",
+      "args": {
+        "sql": "INSERT INTO `code` (`link`, `repo_info`, `readme`) VALUES\n('https://openreview.net/forum?id=gUPGGCM4WH', 'CoRAG (Chain-of-Retrieval Augmented Generation) on OpenReview', 'CoRAG introduces a multi-step iterative retrieval paradigm where the model dynamically reformulates queries and retrieves step-by-step.'),\n('https://sites.google.com/view/sigir2025-tutorial-dprag/home-page', 'SIGIR 2025 Tutorial on Dynamic and Parametric RAG', 'Tutorial covering Dynamic RAG and Parametric RAG paradigms for retrieval-augmented generation.')"
+      }
+    }
+  ]
+}

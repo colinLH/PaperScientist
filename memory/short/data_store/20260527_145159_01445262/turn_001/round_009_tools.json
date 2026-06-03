@@ -1,0 +1,8 @@
+[
+  {
+    "step": 1,
+    "name": "mysql_query",
+    "tool_call_id": "call_00_AJsSu1tIgdJ9J43gK4it3660",
+    "content": "| id | title | year | publish | category |\n| --- | --- | --- | --- | --- |\n| 69 | A Comprehensive Bluetooth Security Audit Framework for IoT Devices | 2026 | Computers & Security (Elsevier), 2026 | Bluetooth Security Audit Framework for IoT |\n| 68 | Bluetooth Low Energy Security Testing with Combinatorial Methods | 2025 | USENIX ATC 2025 (USENIX Annual Technical Conference) | Combinatorial Security Testing for BLE |\n| 67 | Uncovering Bluetooth vulnerabilities with binary coverage-guided fuzz testing and controller emulation (FuBuKi) | 2026 | Computers & Security (Elsevier), 2026 | Binary Coverage-Guided Fuzzing with Controller Emulation |\n| 66 | BLuEMan: A Stateful Simulation-based Fuzzing Framework for Open-Source RTOS Bluetooth Low Energy Protocol Stacks | 2025 | USENIX Security Symposium 2025 | Simulation-based Stateful BLE Protocol Stack Fuzzing |\n| 65 | BSFuzzer: Context-Aware Semantic Fuzzing for BLE Logic Flaw Detection | 2026 | NDSS Symposium 2026 | Semantic/Context-aware Fuzzing for BLE Logic Flaw Detection |\n\n_5 row(s) returned._"
+  }
+]

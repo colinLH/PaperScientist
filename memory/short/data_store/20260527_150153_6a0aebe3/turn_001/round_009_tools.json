@@ -1,0 +1,8 @@
+[
+  {
+    "step": 1,
+    "name": "mysql_query",
+    "tool_call_id": "call_00_rUTMzOTxanYDBZQfv6bG1183",
+    "content": "| id | title | year |\n| --- | --- | --- |\n| 23 | PANGOLIN: Fuzzing Multilingual IoT Firmware with LLM-Driven Code Analysis | 2026 |\n| 57 | FirmAgent: Leveraging Fuzzing to Assist LLM Agents with IoT Firmware Vulnerability Discovery | 2026 |\n| 59 | Energy-Efficient Multi-LLM Reasoning for Binary-Free Zero-Day Detection in IoT Firmware | 2025 |\n| 70 | Automated IoT Firmware Vulnerability Detection using Large Language Models | 2025 |\n| 71 | Cracking IoT Security: Can LLMs Outsmart Static Analysis Tools? | 2026 |\n\n_5 row(s) returned._"
+  }
+]

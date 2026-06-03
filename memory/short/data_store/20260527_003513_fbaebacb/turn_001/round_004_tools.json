@@ -1,0 +1,8 @@
+[
+  {
+    "step": 1,
+    "name": "mysql_describe_table",
+    "tool_call_id": "call_00_svGjUEYknOJhNgDRBy9M3127",
+    "content": "**Schema of `code`:**\n\n| Field | Type | Null | Key | Default | Extra |\n| --- | --- | --- | --- | --- | --- |\n| id | int | NO | PRI | None | auto_increment |\n| link | varchar(512) | NO |  | None |  |\n| repo_info | text | YES |  | None |  |\n| readme | longtext | YES |  | None |  |"
+  }
+]
