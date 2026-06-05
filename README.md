@@ -3,6 +3,7 @@
 An AI-powered literature collection and conversational assistant built with LangGraph + FastAPI.  
 It supports multi-turn dialogue, automated paper collection, search tool calling, and MySQL database integration.
 
+![Web UI](1.png)
 ---
 
 ## Quick Start (One-Click)
