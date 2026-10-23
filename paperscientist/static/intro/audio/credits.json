@@ -1,0 +1,29 @@
+[
+  {
+    "title": "Hiraeth",
+    "author": "Scott Buckley",
+    "page": "https://www.scottbuckley.com.au/library/hiraeth/",
+    "download": "https://www.scottbuckley.com.au/library/wp-content/uploads/2020/06/sb_hiraeth.mp3",
+    "license": "CC BY 4.0",
+    "sha256": "f790c7d53b8d802981ff7cdd8c59e22cdfe103ea66aba296c6cf1a65fe7fcf01",
+    "bytes": 13851302
+  },
+  {
+    "title": "Solace",
+    "author": "Scott Buckley",
+    "page": "https://www.scottbuckley.com.au/library/solace/",
+    "download": "https://www.scottbuckley.com.au/library/wp-content/uploads/2020/05/sb_solace.mp3",
+    "license": "CC BY 4.0",
+    "sha256": "bb54696d9b49e60d8e9edc25d80c19a975d25b3c8d8ca32afe4d963372e1d1bf",
+    "bytes": 14257802
+  },
+  {
+    "title": "Aurora",
+    "author": "Scott Buckley",
+    "page": "https://www.scottbuckley.com.au/library/aurora/",
+    "download": "https://www.scottbuckley.com.au/library/wp-content/uploads/2021/10/Aurora.mp3",
+    "license": "CC BY 4.0",
+    "sha256": "311ae35bf827be51372da47693357f79b8022b704d833cd26d547bbf67c117ed",
+    "bytes": 19954645
+  }
+]

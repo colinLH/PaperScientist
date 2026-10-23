@@ -1,0 +1,160 @@
+/* Visual effects are separate from the timeline's layout and interactions. */
+:root {
+  --ps-a: #7c5cff; --ps-b: #22d3ee; --ps-c: #f472b6;
+  --ps-bg: #07070d; --ps-panel: rgba(18,18,30,.62);
+  --ps-glass: rgba(18,18,30,.62); --ps-line: rgba(255,255,255,.08);
+  --ps-muted: #a9a6bd; --ps-blue: #a5c9ff;
+}
+html { background: #07070d !important; }
+body {
+  background: radial-gradient(1200px 700px at 88% -10%, #1d1546 0%, transparent 60%),
+    radial-gradient(900px 640px at -10% 110%, #08283a 0%, transparent 60%), #07070d !important;
+}
+body::before {
+  content: ''; position: fixed; inset: -6%; z-index: 0; pointer-events: none;
+  background: radial-gradient(32% 28% at 25% 30%, rgba(124,92,255,.24), transparent 70%),
+    radial-gradient(28% 26% at 75% 68%, rgba(34,211,238,.16), transparent 70%),
+    radial-gradient(22% 20% at 62% 18%, rgba(244,114,182,.12), transparent 70%);
+  animation: ps-aurora 28s ease-in-out infinite alternate;
+}
+body::after {
+  content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,.6) 100%),
+    linear-gradient(rgba(255,255,255,.022) 1px, transparent 1px) 0 0/46px 46px,
+    linear-gradient(90deg, rgba(255,255,255,.022) 1px, transparent 1px) 0 0/46px 46px;
+}
+#ps-fx { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 0; pointer-events: none; }
+@keyframes ps-aurora {
+  0% { transform: translate3d(0,0,0) rotate(0deg) scale(1); }
+  50% { transform: translate3d(4%,-3%,0) rotate(8deg) scale(1.08); }
+  100% { transform: translate3d(-4%,3%,0) rotate(-6deg) scale(1.02); }
+}
+@keyframes ps-shimmer { to { background-position: 200% center; } }
+@keyframes ps-spin { to { --ps-angle: 360deg; } }
+@keyframes ps-rise {
+  from { opacity: 0; transform: translateY(10px) scale(.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes ps-pulse {
+  0%,100% { opacity: .45; transform: scale(.96); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+::selection { background: rgba(124,92,255,.45); color: #fff; }
+.gradio-container { background: transparent !important; position: relative; z-index: 1; }
+#sidebar {
+  background: linear-gradient(180deg, rgba(20,18,38,.94), rgba(9,11,21,.94));
+  box-shadow: 10px 0 40px rgba(0,0,0,.35), inset -1px 0 0 rgba(124,92,255,.14);
+  border-right: 1px solid rgba(255,255,255,.06);
+}
+#brand h2, .ps-empty h2, .memory-intro h2 {
+  background: linear-gradient(90deg, #fff 0%, #c4b5fd 30%, #67e8f9 55%, #f9a8d4 75%, #fff 100%);
+  background-size: 200% auto; -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: ps-shimmer 7s steps(84) infinite; text-shadow: 0 0 14px rgba(124,92,255,.18);
+}
+#brand p { color: #8a86a8; }
+#new-chat { transition: background .25s, box-shadow .25s, color .25s; }
+#new-chat:hover {
+  background: linear-gradient(90deg, rgba(124,92,255,.22), rgba(34,211,238,.08));
+  box-shadow: inset 0 0 0 1px rgba(124,92,255,.30), 0 6px 22px rgba(124,92,255,.18);
+  color: #fff !important;
+}
+#chat-search input, #chat-search textarea {
+  background: rgba(255,255,255,.04) !important; border: 1px solid var(--ps-line) !important;
+  transition: border-color .25s, box-shadow .25s;
+}
+#chat-search input:focus, #chat-search textarea:focus {
+  border-color: rgba(124,92,255,.6) !important;
+  box-shadow: 0 0 0 3px rgba(124,92,255,.15), 0 0 18px rgba(124,92,255,.18) !important;
+}
+#sidebar-list, .ps-scroll { scrollbar-color: rgba(124,92,255,.35) transparent; }
+#sidebar-bottom { border-top-color: rgba(124,92,255,.18); }
+#sidebar-bottom button:hover { color: #fff; text-shadow: 0 0 10px rgba(34,211,238,.7); }
+.breadcrumb strong { color: #f0eeff; text-shadow: 0 0 16px rgba(124,92,255,.45); }
+#workspace-tabs > .tab-nav {
+  border-image: linear-gradient(90deg, transparent, rgba(124,92,255,.55), rgba(34,211,238,.45), transparent) 1;
+}
+#workspace-tabs > .tab-nav button.selected {
+  color: #fff; background: linear-gradient(135deg, rgba(124,92,255,.32), rgba(34,211,238,.16));
+  box-shadow: inset 0 0 0 1px rgba(124,92,255,.38), 0 6px 22px rgba(124,92,255,.22);
+  text-shadow: 0 0 10px rgba(196,181,253,.6);
+}
+.ps-question {
+  background: linear-gradient(135deg, rgba(124,92,255,.24), rgba(34,211,238,.10));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 10px 30px rgba(0,0,0,.35), 0 0 24px rgba(124,92,255,.12);
+}
+#composer {
+  background: linear-gradient(rgba(22,22,36,.86), rgba(16,16,28,.86)) padding-box,
+    conic-gradient(from var(--ps-angle, 0deg), rgba(124,92,255,.65), rgba(34,211,238,.50), rgba(244,114,182,.45), rgba(124,92,255,.65)) border-box !important;
+  border: 1px solid transparent !important;
+  box-shadow: 0 18px 50px rgba(0,0,0,.45), 0 0 40px rgba(124,92,255,.12);
+  animation: ps-spin 9s steps(108) infinite; transition: box-shadow .25s;
+}
+#composer:focus-within {
+  border-color: transparent !important;
+  box-shadow: 0 18px 60px rgba(0,0,0,.5), 0 0 0 4px rgba(124,92,255,.10), 0 0 60px rgba(124,92,255,.28), 0 0 90px rgba(34,211,238,.12);
+}
+#attach, #settings-toggle, #send { transition: transform .25s, box-shadow .25s, background .25s; }
+#attach:hover, #settings-toggle:hover {
+  background: rgba(255,255,255,.07); color: #fff; box-shadow: 0 0 16px rgba(124,92,255,.35);
+}
+#settings-toggle:hover { transform: rotate(60deg); }
+#stop:hover { background: rgba(244,114,182,.22); color: #fff; box-shadow: 0 0 16px rgba(244,114,182,.4); }
+#send { position: relative; isolation: isolate; background: linear-gradient(135deg, #a78bfa, #22d3ee); color: #0b0b18; box-shadow: 0 6px 20px rgba(124,92,255,.35); }
+#send::before { content: ''; position: absolute; inset: -3px; z-index: -1; border: 1px solid rgba(124,92,255,.5); border-radius: inherit; box-shadow: 0 0 12px rgba(34,211,238,.35); animation: ps-pulse 2.8s ease-in-out infinite; pointer-events: none; }
+#send:hover { background: linear-gradient(135deg, #c4b5fd, #67e8f9); transform: translateY(-1px) scale(1.06); }
+#send:disabled { filter: grayscale(.85) brightness(.7); animation: none; box-shadow: none; transform: none; }
+#send:disabled::before { display: none; }
+.attachment-chips span {
+  background: rgba(124,92,255,.14); border-color: rgba(124,92,255,.38);
+  box-shadow: 0 0 12px rgba(124,92,255,.15); animation: ps-rise .35s ease both;
+}
+#settings-panel, #research-question, .memory-card {
+  background: var(--ps-glass); border-color: var(--ps-line);
+  box-shadow: 0 16px 44px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.05);
+  animation: ps-rise .35s ease both;
+}
+.memory-card { transition: transform .3s, border-color .3s, box-shadow .3s; }
+.memory-card:hover {
+  transform: translateY(-2px); border-color: rgba(124,92,255,.4);
+  box-shadow: 0 16px 40px rgba(0,0,0,.45), 0 0 30px rgba(124,92,255,.18), inset 0 1px 0 rgba(255,255,255,.07);
+}
+/* Carry the same glass and glow through the new file cards and turn navigator. */
+.ps-primary-file, .ps-changes, .ps-turn-tip, .ps-preview {
+  background: rgba(22,22,36,.86); border-color: rgba(124,92,255,.24);
+  box-shadow: 0 12px 32px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.05);
+}
+.ps-primary-file { transition: background .25s, border-color .25s, box-shadow .25s; }
+.ps-primary-file:hover {
+  background: rgba(45,34,73,.86); border-color: rgba(124,92,255,.5);
+  box-shadow: 0 12px 32px rgba(0,0,0,.35), 0 0 24px rgba(124,92,255,.18);
+}
+.ps-changes-header, .ps-preview > header, .ps-preview-toolbar { border-bottom-color: rgba(124,92,255,.18); }
+.ps-more-files > summary { background: rgba(124,92,255,.08); }
+.ps-change-row:hover, .ps-small:hover, .ps-close:hover { background: rgba(124,92,255,.16); }
+.ps-small { border-color: rgba(167,139,250,.28); }
+.ps-file-chip { color: #a5c9ff !important; }
+.ps-file-chip:hover { color: #c4b5fd !important; text-shadow: 0 0 12px rgba(124,92,255,.5); }
+.ps-tool-group > summary:hover { color: #c4b5fd; }
+.ps-tool-row:hover { color: #c4b5fd !important; }
+.ps-streaming:after { background: #67e8f9; box-shadow: 0 0 12px rgba(34,211,238,.6); }
+.ps-connection { background: rgba(7,7,13,.75); color: #a9a6bd; border-radius: 6px; }
+.ps-jump { background: rgba(30,26,50,.9); border-color: rgba(124,92,255,.4); box-shadow: 0 4px 20px rgba(124,92,255,.2); }
+.ps-turn-tick span { background: rgba(167,139,250,.35); }
+.ps-turn-tick.ps-active span { background: #c4b5fd; box-shadow: 0 0 10px rgba(124,92,255,.6); }
+.ps-turn-tick:hover span, .ps-turn-tick:focus-visible span { background: #67e8f9; }
+.ps-turn-tip { background: rgba(30,26,45,.96); }
+.ps-preview { background: rgba(18,18,30,.96); box-shadow: 0 24px 80px #000a, 0 0 50px rgba(124,92,255,.18); }
+.ps-preview::backdrop { background: rgba(5,5,12,.78); }
+.ps-preview-toolbar select { background: #201c32; border-color: rgba(124,92,255,.3); }
+.ps-markdown pre { background: rgba(16,16,28,.8); border-color: rgba(124,92,255,.18); }
+.ps-markdown code { background: rgba(124,92,255,.10); }
+.ps-markdown pre code { background: none; }
+/* Keep the glass palette without continuously re-filtering the moving canvas. */
+.ps-context-menu, .ps-dialog { backdrop-filter: none; -webkit-backdrop-filter: none; background-color: rgba(22,22,36,.97); }
+.ps-dialog::backdrop { backdrop-filter: none; background: rgba(5,5,12,.78); }
+.ps-effects-paused body::before, .ps-effects-paused #brand h2,
+.ps-effects-paused .ps-empty h2, .ps-effects-paused .memory-intro h2,
+.ps-effects-paused #composer, .ps-effects-paused #send::before { animation-play-state: paused !important; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}

@@ -1,0 +1,10 @@
+{
+  "file": "downloads/skills_recommendmp4.mp4",
+  "sha256": "216a3487693de7fde3b6715e1cdf95dc91d42ea05483b4953dec9da280ab2e51",
+  "seconds": 86.2333,
+  "resolution": [
+    592,
+    1280
+  ],
+  "method": "Local frame extraction plus faster-whisper base/int8 Chinese ASR; repository names manually checked against video frames and GitHub sources. ASR contains errors and is not authoritative for names."
+}

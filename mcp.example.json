@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "research": {
+      "transport": "streamable_http",
+      "url": "https://your-trusted-mcp-server.example/mcp",
+      "headers": {},
+      "allowed_tools": ["search_papers", "fetch_paper"],
+      "disabled": true
+    },
+    "local": {
+      "transport": "stdio",
+      "command": "python",
+      "args": ["/absolute/path/to/your_mcp_server.py"],
+      "allowed_tools": [],
+      "disabled": true
+    }
+  }
+}

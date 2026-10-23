@@ -4,3 +4,31 @@ __pycache__/
 *.db-shm
 *.db-wal
 .env
+.env.*
+!.env.example
+.paperscientist/
+.paperscientist-workspace/
+paperscientist.local.json
+.tools/
+.test-output/
+output/
+.pytest_cache/
+validation-results/
+# Pinned third-party downloads; restore with scripts/install_research_skills.py.
+external_skills/
+# Local credentials, reference checkouts and downloaded source material.
+.env copy*
+.claude/settings.local.json
+copilot_marscode/
+prompt-base/
+downloads/
+skills/
+# Session history and model-training outputs are not source code.
+memory/long/
+memory/short/
+web/chat_sessions/
+rlagent/**/outputs/
+rlagent/**/data/
+*.safetensors
+*.pt
+*.pth

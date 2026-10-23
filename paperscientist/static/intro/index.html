@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#172c36"><title>PaperScientist · 向未知出发</title>
+  <link rel="stylesheet" href="/intro-assets/intro.css?v=3">
+</head>
+<body>
+  <main id="journey" aria-label="PaperScientist 交互开场" data-scene="0">
+    <div id="landscape" aria-hidden="true"></div><div class="vignette" aria-hidden="true"></div>
+    <header><a class="wordmark" href="/?workspace=1"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2 30 16 16 30 2 16Zm0 7 7 7-7 7-7-7Z"/></svg>PaperScientist</a>
+      <div class="header-actions"><button id="sound" type="button" aria-pressed="true">♫ <span>声音已开启</span></button><button id="credits-open" type="button" aria-label="音乐版权信息" title="音乐版权信息">ⓘ</button><a class="enter-link" href="/?workspace=1">跳过开场 ↗</a></div>
+    </header>
+    <div id="copy" aria-live="polite" aria-atomic="true">
+      <p id="chapter">向未知出发</p><h1 id="title">每一个发现，<br>始于一个好问题。</h1>
+      <p id="description">穿过已知的边界，让好奇心带路。</p>
+      <a id="start" href="/?workspace=1" hidden><span>Start</span><small>开始我的研究</small><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16m-6-6 6 6-6 6"/></svg></a>
+    </div>
+    <nav id="chapters" aria-label="开场章节"></nav>
+    <footer><div class="chapter-count"><span id="number">01</span><span class="rule"></span><span>06</span><span id="scene-name">雾中的问题</span></div>
+      <div class="scroll-control"><button id="previous" aria-label="上一幕" disabled>↑</button><span id="hint">滚动，向前探索</span><button id="next" aria-label="下一幕">↓</button></div>
+    </footer>
+    <p id="sound-status" class="sr-only" role="status"></p><p id="fallback" hidden>轻量场景模式 · 仍可滚动探索</p>
+  </main>
+  <dialog id="credits"><form method="dialog"><button aria-label="关闭版权信息">×</button></form><h2>配乐署名</h2>
+    <p>场景配乐：<a href="https://www.scottbuckley.com.au/library/hiraeth/" target="_blank" rel="noopener">Hiraeth</a>、<a href="https://www.scottbuckley.com.au/library/solace/" target="_blank" rel="noopener">Solace</a>、<a href="https://www.scottbuckley.com.au/library/aurora/" target="_blank" rel="noopener">Aurora</a> — Scott Buckley。</p>
+    <p>Released under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> · <a href="https://www.scottbuckley.com.au" target="_blank" rel="noopener">www.scottbuckley.com.au</a>。原曲未裁剪；播放时调整音量与交叉淡化。</p>
+  </dialog>
+  <noscript><style>#copy{opacity:1}#start{display:flex!important}#landscape{background:linear-gradient(#596f7a,#192b39)}</style><p class="noscript">启用 JavaScript 可体验镜头漫游，或<a href="/?workspace=1">直接进入工作台</a>。</p></noscript>
+  <script type="module" src="/intro-assets/intro.js?v=3"></script>
+</body></html>
