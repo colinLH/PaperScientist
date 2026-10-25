@@ -80,8 +80,9 @@ class WorkspaceTests(unittest.TestCase):
         with TestClient(create_app(settings, with_ui=False)) as client:
             project = client.post("/api/projects", json={"name": "图学习"}).json()
             first = client.post("/api/sessions", params={"project_id": project["id"]}).json()
-            client.post("/api/sessions", params={"project_id": project["id"]})
-            self.assertEqual(len(client.get("/api/projects").json()[0]["sessions"]), 2)
+            reused = client.post("/api/sessions", params={"project_id": project["id"]}).json()
+            self.assertEqual(reused["id"], first["id"])
+            self.assertEqual(len(client.get("/api/projects").json()[0]["sessions"]), 1)
             self.assertEqual(client.get("/api/sessions/"+first["id"]).status_code, 200)
 
 

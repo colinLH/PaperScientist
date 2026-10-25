@@ -124,7 +124,7 @@ class WorkspaceActions:
             if self.service.locks.get(target) and self.service.locks[target].locked():
                 raise ValueError("请先停止当前回答，再分叉完整历史")
             sid = self.fork(item, empty=value == "empty")
-            result.update(note="已创建独立分叉 · 共享原项目记忆", navigate=sid)
+            result.update(note="已打开空白对话 · 共享原项目记忆" if value == "empty" else "已创建独立分叉 · 共享原项目记忆", navigate=sid)
         elif action == "share" and kind == "session":
             content = self.transcript(target)
             token = uuid.uuid4().hex
@@ -158,6 +158,8 @@ class WorkspaceActions:
         return path
 
     def fork(self, source, empty=False):
+        if empty:
+            return self.store.new_chat(project_id=source["project_id"])["id"]
         sid, old = uuid.uuid4().hex, source["id"]
         src, dest = self.checked_workspace(old), self.checked_workspace(sid)
         if not empty and src.exists():

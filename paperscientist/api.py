@@ -5,7 +5,7 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile, Request, Query
 from fastapi.responses import FileResponse, StreamingResponse, HTMLResponse, Response
 from pydantic import BaseModel, Field
 
@@ -26,6 +26,7 @@ class ChatRequest(BaseModel):
 
 class ProjectRequest(BaseModel):
     name: str = Field(min_length=1, max_length=80)
+    folder_path: str | None = Field(default=None, max_length=4096)
 
 
 class RunRequest(ChatRequest):
@@ -130,17 +131,38 @@ def create_app(settings=None, service=None, with_ui=True):
     async def projects():
         return service.store.project_list()
 
-    @app.post("/api/projects")
-    async def new_project(body: ProjectRequest):
+    def require_local_folders(request):
+        from urllib.parse import urlsplit
+        if not request.client or request.client.host not in {"127.0.0.1", "::1", "testclient"}:
+            raise HTTPException(403, "请在运行 PaperScientist 的电脑上选择文件夹")
+        origin = request.headers.get("origin")
+        if origin and urlsplit(origin).netloc != request.url.netloc:
+            raise HTTPException(403, "文件夹操作仅允许来自当前网站")
+        if request.headers.get("sec-fetch-site") == "cross-site":
+            raise HTTPException(403, "文件夹操作仅允许来自当前网站")
+
+    @app.get("/api/local-folders")
+    def local_folders(request: Request, path: str = Query(default="", max_length=4096), offset: int = Query(default=0, ge=0, le=100000)):
+        require_local_folders(request)
+        from .project_folders import browse_folders
         try:
-            return service.store.create_project(body.name)
+            return browse_folders(path, offset)
+        except (ValueError, OSError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @app.post("/api/projects")
+    def new_project(body: ProjectRequest, request: Request):
+        if body.folder_path:
+            require_local_folders(request)
+        try:
+            return service.store.create_project(body.name, folder_path=body.folder_path)
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
 
     @app.post("/api/sessions")
-    async def new_session(project_id: str = "default"):
+    def new_session(project_id: str = "default"):
         try:
-            return service.store.session(uuid.uuid4().hex,project_id=project_id)
+            return service.store.new_chat(project_id=project_id)
         except ValueError as exc:
             raise HTTPException(400,str(exc)) from exc
 

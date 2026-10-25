@@ -44,9 +44,9 @@ def mount_ui(app, service):
                 gr.Markdown("## ◈ PaperScientist\nPERSONAL RESEARCH", elem_id="brand")
                 new = gr.Button("✎   新聊天", elem_id="new-chat")
                 search = gr.Textbox(placeholder="搜索对话或项目", show_label=False, container=False, elem_id="chat-search")
-                with gr.Accordion("＋  新建项目", open=False, elem_id="project-create", key="project-form", preserved_by_key=["open"]) as project_form:
-                    project_name = gr.Textbox(placeholder="例如：长时程 Agent 记忆", show_label=False, max_lines=1)
-                    create = gr.Button("创建项目", size="sm")
+                project_create = gr.HTML('<button type="button" class="ps-project-launch">＋ 新建项目</button>',
+                    elem_id="project-create", apply_default_css=False,
+                    js_on_load="import('/api/ui/projects.js?v=1').then(m => m.mount(element, trigger));")
                 with gr.Column(elem_id="sidebar-list"):
                     navigation = gr.HTML("", elem_id="sidebar-nav", js_on_load=SIDEBAR_JS, apply_default_css=False)
                 with gr.Row(elem_id="sidebar-bottom"):
@@ -161,9 +161,13 @@ def mount_ui(app, service):
             await service.cancel_turn(previous_sid, wait_stream=True)
             if not any(p["id"] == pid and not p.get("archived") for p in actions.groups()):
                 pid = active_project()
-            sid = uuid.uuid4().hex
-            service.store.session(sid, project_id=pid)
-            return reset(sid, pid, "新对话 · 已接入本项目记忆")
+            session = service.store.new_chat(project_id=pid)
+            sid = session["id"]
+            actions.patch("session", sid, unread=False)
+            values = list(reset(sid, pid, "已打开空白对话 · 已接入本项目记忆"))
+            if sid == previous_sid:
+                values[13] = gr.skip()  # Keep the unsent text when already in this blank chat.
+            return values
 
         async def select_session(sid, previous_sid, view_state):
             session = service.store.get_session(sid)
@@ -238,14 +242,13 @@ def mount_ui(app, service):
             return *await new_session(pid, previous_sid, view_state), False
         new.click(start_chat, [project_id, session_id, view], [*reset_outputs, archived], show_progress="hidden")
         chat.clear(start_chat, [project_id, session_id, view], [*reset_outputs, archived], show_progress="hidden")
-        async def create_project(name, previous_sid, view_state):
+        async def open_created_project(previous_sid, view_state, evt: gr.EventData):
             try:
-                item = service.store.create_project(name)
+                item = actions.target("project", (evt._data or {}).get("id", ""))
             except ValueError as exc:
                 raise gr.Error(str(exc)) from exc
-            return *await new_session(item["id"], previous_sid, view_state), "", gr.update(open=False), False
-        create.click(create_project, [project_name, session_id, view], [*reset_outputs, project_name, project_form, archived], show_progress="hidden")
-        project_name.submit(create_project, [project_name, session_id, view], [*reset_outputs, project_name, project_form, archived], show_progress="hidden")
+            return *await new_session(item["id"], previous_sid, view_state), False
+        project_create.click(open_created_project, [session_id, view], [*reset_outputs, archived], show_progress="hidden", concurrency_limit=1)
 
         async def stop_turn(sid, pid, view_state):
             view_state["generation"] += 1
@@ -286,8 +289,7 @@ def mount_ui(app, service):
                     return reset(s["id"], s["project_id"], "已恢复上次对话 · 历史与运行状态已保存")
             if not any(p["id"] == pid for p in actions.groups()):
                 pid = active_project()
-            sid = uuid.uuid4().hex
-            service.store.session(sid, project_id=pid)
+            sid = service.store.new_chat(project_id=pid)["id"]
             return reset(sid, pid, "同一项目共享记忆 · Enter 发送 / Shift + Enter 换行")
         ui.load(initial_workspace, outputs=reset_outputs, show_progress="hidden")
 

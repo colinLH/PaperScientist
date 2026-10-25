@@ -110,7 +110,10 @@ class Workspace:
     def heading(self, sid, pid):
         session = self.store.get_session(sid)
         title = session["title"] if session else "新对话"
-        return '<div class="breadcrumb"><span>▱ ' + html.escape(self.name(pid)) + '</span><b>/</b><strong>' + html.escape(title) + '</strong></div>'
+        project = self.store.project(session or {"id": sid, "user_id": "local", "project_id": pid})
+        folder = project.get("folder_path")
+        hint = html.escape(folder or "未绑定源文件夹", quote=True)
+        return '<div class="breadcrumb"><span title="' + hint + '">▱ ' + html.escape(self.name(pid)) + '</span><b>/</b><strong>' + html.escape(title) + '</strong></div>'
 
     def memory_cards(self, sid, pid):
         session = self.store.get_session(sid) or {"id": sid, "user_id": "local", "project_id": pid}

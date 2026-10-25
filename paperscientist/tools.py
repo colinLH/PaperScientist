@@ -223,18 +223,25 @@ class ToolSet:
                     "source": self.catalog.skills[name].source}
 
         @tool
-        def list_files(glob: str = "**/*") -> list:
-            """List files in this session's research workspace; paths are relative."""
+        def list_files(glob: str = "**/*", scope: Literal["session", "project"] = "session") -> list:
+            """List relative files. scope=project reads the optional bound source folder; session is the output workspace."""
             if ".." in Path(glob).parts or Path(glob).is_absolute():
                 raise ValueError("Use a relative workspace glob")
-            root = store.workspace(sid)
-            return [{"path": str(p.relative_to(root)), "bytes": p.stat().st_size}
-                    for p in root.glob(glob) if p.is_file() and ".ui-cache" not in p.relative_to(root).parts and p.resolve().is_relative_to(root)][:200]
+            root = store.project_folder(sid) if scope == "project" else store.workspace(sid)
+            from itertools import islice
+            return list(islice(({"path": str(p.relative_to(root)), "bytes": p.stat().st_size}
+                    for p in root.glob(glob) if p.is_file() and ".ui-cache" not in p.relative_to(root).parts and p.resolve().is_relative_to(root)), 200))
 
         @tool
-        def read_file(path: str, offset: int = 0, max_chars: int = 20000) -> dict:
-            """Read UTF-8 source, notes, CSV, JSON or LaTeX from the workspace. Use read_paper for PDF."""
-            file = store.file(sid, path)
+        def read_file(path: str, offset: int = 0, max_chars: int = 20000, scope: Literal["session", "project"] = "session") -> dict:
+            """Read UTF-8 notes/code/data. scope=project reads the bound local source folder; output writes stay in the session. Use read_paper for PDF."""
+            if scope == "project":
+                root = store.project_folder(sid)
+                file = (root / path).resolve()
+                if Path(path).is_absolute() or not file.is_relative_to(root) or file == root:
+                    raise ValueError("文件必须位于绑定的项目源文件夹内")
+            else:
+                file = store.file(sid, path)
             if file.stat().st_size > 10_000_000:
                 raise ValueError("Text file exceeds 10MB")
             text = file.read_text(encoding="utf-8-sig")

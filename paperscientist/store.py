@@ -121,6 +121,49 @@ class Store:
             row = db.execute("SELECT * FROM sessions WHERE id=?", (identifier(sid),)).fetchone()
         return dict(row) if row else None
 
+    def new_chat(self, project_id="default", user_id="local"):
+        """Atomically reuse a genuinely unused root chat, including across clients."""
+        identifier(project_id)
+        identifier(user_id)
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            if db.execute("SELECT 1 FROM removed_items WHERE user_id=? AND kind='project' AND target=?",
+                          (user_id, project_id)).fetchone():
+                raise ValueError("项目已删除")
+            nav = db.execute("SELECT state FROM navigation WHERE user_id=? AND kind='project' AND target=?",
+                             (user_id, project_id)).fetchone()
+            if nav and json.loads(nav[0]).get("archived"):
+                raise ValueError("请先恢复归档的项目")
+            if project_id != "default" and not db.execute(
+                "SELECT 1 FROM projects WHERE owner=? UNION SELECT 1 FROM sessions WHERE user_id=? AND project_id=?",
+                (f"{user_id}/{project_id}", user_id, project_id)).fetchone():
+                raise ValueError("项目不存在")
+            has_runs = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='research_runs'").fetchone()
+            query = """SELECT s.* FROM sessions s WHERE user_id=? AND project_id=? AND parent_id IS NULL
+                AND NOT EXISTS(SELECT 1 FROM messages m WHERE m.session_id=s.id)
+                AND NOT EXISTS(SELECT 1 FROM artifacts a WHERE a.session_id=s.id)
+                AND NOT EXISTS(SELECT 1 FROM sessions c WHERE c.parent_id=s.id)
+                AND NOT EXISTS(SELECT 1 FROM agents a WHERE a.id=s.id OR a.parent_id=s.id)
+                AND NOT EXISTS(SELECT 1 FROM removed_items r WHERE r.user_id=s.user_id AND r.kind='session' AND r.target=s.id)
+                AND NOT EXISTS(SELECT 1 FROM navigation n WHERE n.user_id=s.user_id AND n.kind='session'
+                    AND n.target=s.id AND json_extract(n.state,'$.archived')=1)
+            """
+            if has_runs:
+                query += " AND NOT EXISTS(SELECT 1 FROM research_runs r WHERE r.session_id=s.id)"
+            for row in db.execute(query + " ORDER BY updated_at DESC, id", (user_id, project_id)).fetchall():
+                folder = self.root / "workspaces" / row["id"]
+                # Uploaded or hand-written files are a draft too; never discard them.
+                try:
+                    if folder.exists() and any(p.is_file() for p in folder.rglob("*")):
+                        continue
+                except OSError:
+                    continue
+                return dict(row)
+            sid, stamp = uuid.uuid4().hex, now()
+            db.execute("INSERT INTO sessions VALUES(?,?,?,?,?,?,?)",
+                       (sid, user_id, project_id, None, "新研究对话", stamp, stamp))
+            return dict(db.execute("SELECT * FROM sessions WHERE id=?", (sid,)).fetchone())
+
     def sessions(self, user_id="local"):
         with self.connect() as db:
             return [dict(r) for r in db.execute(
@@ -135,7 +178,7 @@ class Store:
             pid = session["project_id"]
             if pid not in groups:
                 state = self.project(session)
-                groups[pid] = {"id": pid, "name": state.get("name") or ("我的研究" if pid == "default" else pid), "sessions": []}
+                groups[pid] = {"id": pid, "name": state.get("name") or ("我的研究" if pid == "default" else pid), "folder_path": state.get("folder_path"), "sessions": []}
             groups[pid]["sessions"].append(session)
         with self.connect() as db:
             rows = db.execute("SELECT owner,state FROM projects WHERE owner LIKE ?", (user_id+"/%",)).fetchall()
@@ -143,7 +186,7 @@ class Store:
             owner_user, pid = row["owner"].split("/", 1)
             if owner_user == user_id and pid not in groups:
                 state = json.loads(row["state"])
-                groups[pid] = {"id": pid, "name": state.get("name") or pid, "sessions": []}
+                groups[pid] = {"id": pid, "name": state.get("name") or pid, "folder_path": state.get("folder_path"), "sessions": []}
         if not groups:
             with self.connect() as db:
                 removed = db.execute("SELECT 1 FROM removed_items WHERE user_id=? AND kind='project' AND target='default'", (user_id,)).fetchone()
@@ -151,14 +194,26 @@ class Store:
                 groups["default"] = {"id": "default", "name": "我的研究", "sessions": []}
         return list(groups.values())
 
-    def create_project(self, name, user_id="local"):
+    def create_project(self, name, user_id="local", folder_path=None):
         identifier(user_id)
         name = name.strip()
         if not name or len(name) > 80:
             raise ValueError("项目名称需为 1–80 个字符")
+        from .project_folders import validate_folder
+        folder_path = validate_folder(folder_path) if folder_path and folder_path.strip() else None
         pid = uuid.uuid4().hex
-        self.update_project({"user_id": user_id, "project_id": pid, "id": "unused"}, {"name": name})
-        return {"id": pid, "name": name}
+        self.update_project({"user_id": user_id, "project_id": pid, "id": "unused"}, {"name": name, "folder_path": folder_path})
+        return {"id": pid, "name": name, "folder_path": folder_path}
+
+    def project_folder(self, sid):
+        session = self.get_session(sid)
+        if not session or self.get_agent(sid).get("isolated_review"):
+            raise ValueError("此会话不可访问项目源文件夹")
+        folder = self.project(session).get("folder_path")
+        if not folder:
+            raise ValueError("当前项目未绑定源文件夹")
+        from .project_folders import validate_folder
+        return Path(validate_folder(folder))
 
     def set_title(self, sid, title, source="model"):
         title = short_title(title, 40)
