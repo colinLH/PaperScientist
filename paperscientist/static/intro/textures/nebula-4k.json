@@ -1,0 +1,40 @@
+{
+  "path": "nebula-4k.webp",
+  "width": 3840,
+  "height": 2160,
+  "bytes": 2534032,
+  "sha256": "41d11eddbe2f9ebb0fccba4218b12bb1294e4e76a9fe1bd7cd7520c159e83a0e",
+  "native_4k": false,
+  "method": "reference-guided generated artwork, locally super-resolved to UHD",
+  "source": {
+    "path": "nebula-hd.png",
+    "width": 1672,
+    "height": 941,
+    "sha256": "c2653fc8456a9b40948d410f65da5f498db2822fffc08bd91ac30b8428fac4d7"
+  },
+  "super_resolution": {
+    "tool": "Real-ESRGAN ncnn Vulkan",
+    "release": "20220424",
+    "release_url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-windows.zip",
+    "archive_sha256": "abc02804e17982a3be33675e4d471e91ea374e65b70167abc09e31acb412802d",
+    "model": "realesrgan-x4plus",
+    "scale": 4,
+    "tile_size": 256,
+    "threads": "1:1:1",
+    "output_size": [
+      6688,
+      3764
+    ]
+  },
+  "export": {
+    "size": [
+      3840,
+      2160
+    ],
+    "fit": "center crop, Lanczos",
+    "format": "WebP",
+    "quality": 96,
+    "method": 6
+  },
+  "runtime": "static texture only; no super-resolution inference in browser"
+}

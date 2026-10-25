@@ -46,7 +46,9 @@ export class HandPresence{
   update(now,detected){
     const dt=this.last===null?0:clamp(now-this.last,0,.1);this.last=now;this.reborn=false;
     if(detected){if(this.alpha<=.02){this.reborn=true;this.born=now;this.alpha=1;}else this.alpha=Math.min(1,this.alpha+dt/this.rise);this.seen=now;}
-    else if(now-this.seen>this.grace)this.alpha=Math.max(0,this.alpha-dt/this.fade);
+    // Absolute elapsed time keeps the one-second guarantee even after a slow
+    // frame or background-tab throttling; it must not depend on frame count.
+    else if(now-this.seen>this.grace)this.alpha=Math.min(this.alpha,Math.max(0,1-(now-this.seen-this.grace)/this.fade));
     return this;
   }
 }

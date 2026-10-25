@@ -14,7 +14,9 @@ dialog{max-width:520px;width:calc(100% - 40px);color:#e3ede8;background:#142630;
 .vignette::before,.vignette::after{content:'';position:absolute;inset:0;pointer-events:none;transition:opacity 1.6s var(--ease-in-out)}
 .vignette::before{background:radial-gradient(48% 42% at 78% 22%,rgba(255,236,206,.22),transparent 70%),radial-gradient(38% 30% at 18% 70%,rgba(176,226,222,.10),transparent 72%);mix-blend-mode:screen;filter:blur(8px);animation:breathe 12s ease-in-out infinite}
 .vignette::after{background:radial-gradient(60% 38% at 25% 104%,rgba(226,236,234,.26),transparent 70%),radial-gradient(52% 34% at 78% 108%,rgba(226,236,234,.22),transparent 70%),linear-gradient(0deg,rgba(210,224,226,.12),transparent 34%);background-size:200% 100%,200% 100%,100% 100%;animation:drift 46s ease-in-out infinite alternate}
-#journey[data-scene="3"] .vignette::before{opacity:.35}#journey[data-scene="3"] .vignette::after{opacity:.35}
+#journey[data-scene="3"] .vignette::before,#journey[data-scene="3"] .vignette::after{opacity:0;animation-play-state:paused}
+#journey[data-scene="3"]::after{opacity:0;animation-play-state:paused}
+#journey[data-scene="3"]::before{opacity:.15}
 #journey[data-scene="5"] .vignette::before{background:radial-gradient(30% 34% at 46% 16%,rgba(255,232,190,.32),transparent 70%),radial-gradient(70% 50% at 50% 40%,rgba(255,214,160,.10),transparent 75%);filter:blur(6px) saturate(1.4)}#journey[data-scene="5"] .vignette::after{opacity:.55}
 .wordmark{text-shadow:0 0 18px rgba(214,240,232,.35)}.wordmark svg{filter:drop-shadow(0 0 6px rgba(198,240,226,.55))}
 #chapter{display:flex;align-items:center;gap:14px;text-shadow:0 0 14px rgba(214,240,232,.45)}#chapter::before{content:'';width:34px;height:1px;background:linear-gradient(90deg,transparent,#e8f3ee);box-shadow:0 0 8px #d8f5ea}
@@ -45,3 +47,42 @@ header,footer,#chapters{animation:fade-in 2.2s var(--ease-out) .5s backwards}
 @media(prefers-reduced-motion:reduce){#journey::after,.vignette::before,.vignette::after,#copy.reveal *,#start,#start::after,#next,header,footer,#chapters{animation:none!important}}
 
 .sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip-path:inset(50%);white-space:nowrap;border:0}
+
+/* Grounded, layered valley haze. The camera controls the envelope; only these
+   two cached gradient planes drift. Text and controls remain above the fog. */
+#valley-mist{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden}
+#valley-mist span{position:absolute;left:-8%;width:116%;height:54%;bottom:-12%;background:radial-gradient(ellipse at 25% 70%,#d7e6e1a6,transparent 62%),radial-gradient(ellipse at 78% 88%,#b7d5d0b3,transparent 66%),linear-gradient(0deg,#afcbc366,transparent 78%);animation:valley-drift 46s var(--ease-in-out) infinite alternate}
+#valley-mist span+span{height:37%;bottom:17%;background:radial-gradient(ellipse at 55% 63%,#bed7d566,transparent 65%),radial-gradient(ellipse at 92% 45%,#deebe25e,transparent 70%);animation-duration:62s;animation-direction:alternate-reverse}
+@keyframes valley-drift{from{transform:translate3d(-3%,1%,0)}to{transform:translate3d(3%,-2%,0)}}
+#journey[data-render-state="hidden"] #valley-mist span,#journey[data-render-state="disposed"] #valley-mist span{animation-play-state:paused}
+/* Quiet framing lets the landscape, light paths and star map carry the scene. */
+header{padding:30px clamp(24px,3.4vw,64px)}
+.wordmark{letter-spacing:-.5px;text-shadow:0 2px 12px #07152055}
+#copy{left:10%;max-width:660px}
+h1{text-shadow:0 2px 28px #0b202b80;line-height:1.25;letter-spacing:-.035em}
+#chapter{letter-spacing:.16em;font-size:12px;color:#e1ebe5}
+#chapter::before{width:28px;box-shadow:none;opacity:.7}
+#description{max-width:29em;color:#dce7e3;letter-spacing:.035em;line-height:1.95}
+.enter-link{border-color:#ffffff40;transition:border-color 200ms ease,color 200ms ease}
+.scroll-control button{border-color:#ffffff35;background:#10232a18}
+@media(max-width:700px){#copy{left:8%;max-width:84%}#valley-mist span{height:46%}#valley-mist span+span{height:32%;bottom:19%}}
+@media(prefers-reduced-motion:reduce){#valley-mist span{animation:none}}
+
+/* Camera stays below the copy; no extra WebGL canvas or blur framebuffer. */
+#hand-toggle{white-space:nowrap;font-size:12px}
+#hand-toggle[aria-pressed=true]{color:#bdf6ec}
+#hand-camera{position:absolute;z-index:6;left:32px;bottom:85px;width:320px;max-width:calc(100vw - 48px);border:1px solid #c3e9fa30;border-radius:14px;overflow:hidden;background:#081521eb;box-shadow:0 8px 28px #0005}
+#hand-camera[hidden]{display:none}
+.camera-frame{width:100%;aspect-ratio:4/3;position:relative;background:radial-gradient(ellipse at center,#132b3a,#07121c)}
+.camera-frame video{display:none}.camera-frame canvas{width:100%;height:100%;display:block}
+.camera-empty{position:absolute;inset:0;display:grid;place-items:center;color:#acd8ef66;font-size:40px;pointer-events:none}
+#hand-camera[data-state=ready] .camera-empty{display:none}
+.camera-status{display:flex;align-items:center;gap:8px;padding:10px 12px 3px;font-size:11px;color:#e2f1f5}
+.camera-status span{flex:1}.camera-status button{padding:4px 8px;font-size:11px;border:1px solid #b9e2ee44;border-radius:6px;display:none}
+#hand-camera[data-state=unavailable] [data-retry],#hand-camera[data-state=off] [data-retry]{display:block}
+#hand-camera small{display:block;padding:3px 12px 10px;font-size:10px;color:#91a9b9}
+#hand-camera[data-state=unavailable] .camera-frame,#hand-camera[data-state=off] .camera-frame{display:none}
+@media(min-width:900px){#journey[data-scene="3"] #copy{top:28%;left:6%;}#journey[data-scene="3"] h1{font-size:clamp(32px,4vw,54px)}#journey[data-scene="3"] #description{font-size:13px}}
+@media(max-height:780px) and (min-width:900px){#hand-camera{width:240px;bottom:82px}#journey[data-scene="3"] #copy{top:25%}}
+@media(max-width:899px){#hand-camera{left:24px;bottom:80px;width:min(240px,45vw)}#journey[data-scene="3"] #copy{top:28%;}#journey[data-scene="3"] h1{font-size:clamp(26px,5.4vw,44px)}#hand-camera small{font-size:9px}.header-actions{gap:12px}#hand-toggle{font-size:10px}}
+@media(max-width:540px){header{align-items:flex-start;gap:12px}.wordmark{font-size:14px}.header-actions{justify-content:flex-end;flex-wrap:wrap;gap:6px 13px;max-width:165px}#credits-open{margin-left:0;padding:2px}#sound{padding:0}#sound span{display:none}#hand-toggle{padding:3px 0}.enter-link{font-size:10px}#journey[data-scene="3"] #copy{top:24%;width:80%}#hand-camera{width:min(240px,calc(100vw - 100px));bottom:76px}}

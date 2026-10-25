@@ -1,0 +1,11 @@
+{
+  "source": "image_gen built-in; reference-preserving reconstruction",
+  "path": "nebula-hd.png",
+  "width": 1672,
+  "height": 941,
+  "sha256": "c2653fc8456a9b40948d410f65da5f498db2822fffc08bd91ac30b8428fac4d7",
+  "native_4k": false,
+  "requested_output": "3840x2160",
+  "actual_output": "1672x941",
+  "note": "Source reconstruction retained for reproducibility. The page uses nebula-4k.webp, locally super-resolved with user approval; see nebula-4k.json."
+}

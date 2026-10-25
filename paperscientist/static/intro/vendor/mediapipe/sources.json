@@ -1,0 +1,45 @@
+{
+  "package": "@mediapipe/tasks-vision",
+  "version": "1.1.1",
+  "license": "Apache-2.0",
+  "registry": "https://registry.npmjs.org/@mediapipe/tasks-vision/-/tasks-vision-1.1.1.tgz",
+  "files": [
+    {
+      "path": "vision_bundle.mjs",
+      "sha256": "a84921e02321e582484c1f8126d344b5f33b791fa09c640a52e20ee8632068f1",
+      "bytes": 156139
+    },
+    {
+      "path": "wasm/vision_wasm_internal.js",
+      "sha256": "6522286aa32dd93eff17c3da002b0649516f87abfec7a80b5bfe5c9625caa5f8",
+      "bytes": 334128
+    },
+    {
+      "path": "wasm/vision_wasm_internal.wasm",
+      "sha256": "0e101a010e262ef8e78f22e3c95b60a9705fd06962753c9acd6356d9fb56b7bd",
+      "bytes": 13519922
+    },
+    {
+      "path": "wasm/vision_wasm_nosimd_internal.js",
+      "sha256": "942654dbdcebce08ea039af23d18e58bebf23c8607d74023d2df7071c8a7b638",
+      "bytes": 333931
+    },
+    {
+      "path": "wasm/vision_wasm_nosimd_internal.wasm",
+      "sha256": "c9b1b69bb87baf9e529254d8559dcbcf4c5a9c0eda84f56a12f17d675335ec9c",
+      "bytes": 12627509
+    },
+    {
+      "path": "hand_landmarker.task",
+      "source": "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+      "sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+      "bytes": 7819105
+    },
+    {
+      "path": "LICENSE",
+      "source": "https://raw.githubusercontent.com/google-ai-edge/mediapipe/master/LICENSE",
+      "sha256": "8707eef0533987efc5b155d64761eeb6e20793f50b9bd1a68dad1cf4719d0ed8",
+      "bytes": 12331
+    }
+  ]
+}

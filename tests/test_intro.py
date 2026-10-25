@@ -22,4 +22,25 @@ class IntroTests(unittest.TestCase):
             r = c.get('/intro-assets/audio/hiraeth.mp3', headers={'range':'bytes=0-99'})
             self.assertEqual(r.status_code, 206)
             self.assertEqual(len(r.content), 100)
+            # Browser workers and WASM must work from the same local origin,
+            # without a CDN or frontend package manager at runtime.
+            r = c.get('/intro-assets/vendor/mediapipe/wasm/vision_wasm_internal.wasm', headers={'range': 'bytes=0-3'})
+            self.assertEqual(r.status_code, 206)
+            self.assertEqual(r.content, b'\x00asm')
+            self.assertIn('application/wasm', r.headers['content-type'])
+            self.assertEqual(c.get('/intro-assets/hand-worker.js').status_code, 200)
             self.assertEqual(c.get('/intro-assets/../../config.py').status_code, 404)
+
+    def test_texture_mime_overrides_incorrect_windows_file_associations(self):
+        import mimetypes
+        from unittest.mock import patch
+
+        with patch.dict(mimetypes.types_map, {'.webp': 'text/plain'}):
+            app = FastAPI()
+            mount_intro(app)
+            with TestClient(app) as c:
+                r = c.get('/intro-assets/textures/nebula-4k.webp', headers={'range': 'bytes=0-11'})
+                self.assertEqual(r.status_code, 206)
+                self.assertEqual(r.headers['content-type'], 'image/webp')
+                self.assertEqual(r.content[:4], b'RIFF')
+                self.assertEqual(r.content[8:12], b'WEBP')

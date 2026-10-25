@@ -1,4 +1,5 @@
 """Standalone cinematic entrance; the research UI keeps its existing URLs."""
+import mimetypes
 from pathlib import Path
 
 from fastapi.responses import FileResponse, RedirectResponse
@@ -6,6 +7,9 @@ from fastapi.staticfiles import StaticFiles
 
 
 def mount_intro(app):
+    # Some Windows registries identify WebP as text/plain. Keep texture delivery
+    # independent of the host's file associations.
+    mimetypes.add_type('image/webp', '.webp')
     root = Path(__file__).parent / 'static' / 'intro'
     app.mount('/intro-assets', StaticFiles(directory=root), name='intro-assets')
 

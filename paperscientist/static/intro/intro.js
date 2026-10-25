@@ -1,5 +1,6 @@
 import {Journey,clamp} from './motion.mjs';
 import {Soundscape} from './audio.js?v=2';
+import {mistEnvelope} from './atmosphere.mjs';
 
 const chapters=[
   {name:'雾中的问题',label:'向未知出发',title:'每一个发现，\n始于一个好问题。',description:'穿过已知的边界，让好奇心带路。'},
@@ -9,10 +10,10 @@ const chapters=[
   {name:'越过山脊',label:'从结果到表达',title:'看清细节，\n也看见全貌。',description:'把数据、图表与文字，整理成有依据的叙述。'},
   {name:'新的地平线',label:'PaperScientist',title:'接下来，\n是你的发现。',description:'带上一个问题，与科研伙伴一起出发。'}
 ];
-const root=document.querySelector('#journey'),host=document.querySelector('#landscape'),copy=document.querySelector('#copy'),nav=document.querySelector('#chapters');
+const root=document.querySelector('#journey'),host=document.querySelector('#landscape'),copy=document.querySelector('#copy'),nav=document.querySelector('#chapters'),veil=document.querySelector('#valley-mist');
 const previous=document.querySelector('#previous'),next=document.querySelector('#next'),start=document.querySelector('#start'),credits=document.querySelector('#credits');
 const reduced=matchMedia('(prefers-reduced-motion: reduce)'),journey=new Journey(5),audio=new Soundscape(document.querySelector('#sound'),document.querySelector('#sound-status'));
-let scene=null,frame=0,timer=0,last=0,shown=0,dead=false,leaving=false,drawn=-1,resizeTimer=0;
+let scene=null,hands=null,frame=0,timer=0,last=0,shown=0,dead=false,leaving=false,drawn=-1,resizeTimer=0;
 const buttons=chapters.map((c,i)=>{const b=document.createElement('button');b.setAttribute('aria-label',`${i+1} · ${c.name}`);b.title=c.name;b.addEventListener('click',()=>go(i));nav.append(b);return b;});
 function textAt(index){if(index===shown&&drawn!==-1)return;shown=index;const c=chapters[index];document.querySelector('#chapter').textContent=c.label;document.querySelector('#title').replaceChildren(...c.title.split('\n').flatMap((line,i)=>i?[document.createElement('br'),document.createTextNode(line)]:[document.createTextNode(line)]));document.querySelector('#description').textContent=c.description;document.querySelector('#scene-name').textContent=c.name;document.querySelector('#number').textContent=String(index+1).padStart(2,'0');start.hidden=index!==5;copy.classList.remove('reveal');void copy.offsetWidth;copy.classList.add('reveal');}
 function controls(){root.dataset.scene=journey.target;previous.disabled=journey.target===0;next.disabled=journey.target===5;document.querySelector('#hint').textContent=journey.target===5?'准备好，开始研究':'滚动，向前探索';buttons.forEach((b,i)=>b.setAttribute('aria-current',String(i===journey.target)));}
@@ -21,11 +22,14 @@ function paint(){
   const p=clamp(journey.value,0,5),near=Math.round(p),distance=Math.abs(p-near);
   textAt(near);copy.style.opacity=String(1-Math.min(1,distance*2.3));copy.style.transform=reduced.matches?'none':`translate3d(0,${(p-near)*-35}px,0)`;copy.style.filter=reduced.matches||distance<.002?'none':`blur(${(distance*16).toFixed(2)}px)`;
   root.dataset.position=p.toFixed(3);root.dataset.moving=String(journey.moving);
-  if(scene)scene.render(p,performance.now()/1000);else host.style.background=`radial-gradient(ellipse at ${60+p*3}% ${40-p*3}%,${['#789698','#80979b','#41576d','#162d48','#a19e9b','#e0c391'][near]},#142b3d 75%)`;
+  if(veil){const haze=mistEnvelope(p);veil.style.opacity=String(haze);veil.hidden=haze===0;}
+  if(scene){if(scene.setDetail(!journey.moving&&Math.abs(p-3)<.025))hands?.resize();scene.render(p,performance.now()/1000);}else host.style.background=`radial-gradient(ellipse at ${60+p*3}% ${40-p*3}%,${['#789698','#80979b','#41576d','#162d48','#a19e9b','#e0c391'][near]},#142b3d 75%)`;
+  hands?.setActive(Math.abs(p-3)<.55&&!credits.open&&!document.hidden&&!leaving);
+  hands?.render(performance.now()/1000,Math.max(0,1-Math.abs(p-3)*2));
   audio.update(p);drawn=p;
 }
 function tick(now){frame=0;if(dead||document.hidden||credits.open)return;const dt=last?Math.min((now-last)/1000,.08):1/30;last=now;journey.tick(dt);paint();if(journey.moving||ambient())schedule();else{last=0;root.dataset.renderState='idle';}}
-function ambient(){return !!scene&&!reduced.matches&&!leaving;}
+function ambient(){return !leaving&&(!!scene&&!reduced.matches||hands?.moving);}
 function schedule(){if(timer||frame||dead||document.hidden)return;root.dataset.renderState=journey.moving?'moving':'ambient';timer=setTimeout(()=>{timer=0;frame=requestAnimationFrame(tick);},1000/30);}
 function wake(){if(!dead&&!document.hidden){last=0;schedule();}}
 function cancel(){clearTimeout(timer);cancelAnimationFrame(frame);timer=frame=0;last=0;}
@@ -39,15 +43,17 @@ let touchY=null;root.addEventListener('touchstart',e=>{if(!credits.open)touchY=e
 root.addEventListener('pointerdown',e=>{if(!audio.armed&&!e.target.closest('#sound,a,#credits-open'))audio.arm();},{passive:true});
 root.addEventListener('touchend',()=>audio.arm(),{passive:true});
 document.addEventListener('keydown',e=>{if(!credits.open&&!e.repeat&&!e.target.closest('#sound,a,#credits-open'))audio.arm();});
-document.querySelector('#credits-open').onclick=()=>{cancel();credits.showModal();audio.visibility(true);};credits.addEventListener('close',()=>{audio.visibility(document.hidden);wake();});
-document.addEventListener('visibilitychange',()=>{audio.visibility(document.hidden);if(document.hidden){cancel();root.dataset.renderState='hidden';}else wake();});
+document.querySelector('#credits-open').onclick=()=>{cancel();credits.showModal();audio.visibility(true);hands?.setActive(false);};credits.addEventListener('close',()=>{audio.visibility(document.hidden);wake();});
+document.addEventListener('visibilitychange',()=>{audio.visibility(document.hidden);hands?.visibility(document.hidden);if(document.hidden){cancel();root.dataset.renderState='hidden';}else wake();});
 reduced.addEventListener('change',()=>go(journey.target,true));
-window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{scene?.resize();wake();},120);});
-function fallback(){scene?.dispose();scene=null;document.querySelector('#fallback').hidden=false;wake();}
+window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{scene?.resize();hands?.resize();wake();},120);});
+function fallback(){hands?.dispose();hands=null;scene?.dispose();scene=null;document.querySelector('#fallback').hidden=false;wake();}
 host.addEventListener('scene-lost',fallback);
+host.addEventListener('scene-ready',wake);
 async function enter(e){if(e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;e.preventDefault();if(leaving)return;leaving=true;audio.fadeOut();root.animate([{opacity:1},{opacity:0}],{duration:reduced.matches?180:800,easing:'ease-out',fill:'forwards'});setTimeout(()=>{dispose();location.assign(e.currentTarget?.href||'/?workspace=1');},reduced.matches?200:1000);}
 document.querySelectorAll('a[href="/?workspace=1"]').forEach(a=>a.addEventListener('click',enter));
-function dispose(){if(dead)return;dead=true;cancel();clearTimeout(resizeTimer);scene?.dispose();scene=null;audio.dispose();root.dataset.renderState='disposed';}
+function dispose(){if(dead)return;dead=true;cancel();clearTimeout(resizeTimer);hands?.dispose();hands=null;scene?.dispose();scene=null;audio.dispose();root.dataset.renderState='disposed';}
 window.addEventListener('pagehide',dispose);window.addEventListener('pageshow',e=>{if(e.persisted)location.reload();});
 controls();paint();audio.visibility(document.hidden);audio.arm();
-try{const {createScene}=await import('./scene.js?v=3');if(!dead){scene=createScene(host);paint();wake();}}catch(error){console.warn('Intro: using lightweight landscape',error.message);fallback();}
+try{const {createScene}=await import('./scene.js?v=6');if(!dead){scene=createScene(host);paint();wake();}}catch(error){console.warn('Intro: using lightweight landscape',error.message);fallback();}
+if(scene&&!dead){try{const {createHands}=await import('./hands.js?v=4');if(!dead){hands=createHands({renderer:scene.renderer,panel:document.querySelector('#hand-camera'),button:document.querySelector('#hand-toggle'),wake});paint();wake();}}catch(error){console.warn('Hand controls unavailable',error.message);document.querySelector('#hand-toggle').textContent='手势暂不可用';}}

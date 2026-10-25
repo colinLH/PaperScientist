@@ -62,6 +62,10 @@ test('hand identity follows proximity, not detection order',()=>{
   assert.deepEqual(assignSlots([],previous),[]);
 });
 
+test('loss also expires after a delayed frame instead of needing many animation ticks',()=>{
+  const h=new HandPresence();h.update(0,true);h.update(.1,true);h.update(1.1,false);assert.equal(h.alpha,0);
+});
+
 test('camera frame covers the viewport without distortion; skeleton has 21 bones',()=>{
   for(const [w,h] of [[1920,1080],[390,844],[1280,1280]]){
     const f=coverFit(640,480,w,h);
