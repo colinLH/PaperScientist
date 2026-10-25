@@ -22,6 +22,7 @@ from .run_store import RunStore
 from .store import dumps
 from .tools import ToolSet
 from .timeline import category, markdown
+from .agent_profiles import HarnessViolation, permits
 
 
 class Question(BaseModel):
@@ -239,9 +240,22 @@ class RunManager:
                     return
                 model = self.service.model_factory(cfg)
                 local = ToolSet(self.service, session, cfg, self.service.scheduler)
-                remote, errors = await load_tools(cfg.data_dir / "mcp.json")
+                profile = getattr(local, 'profile', self.service.profiles.for_session(self.store, session))
+                remote, errors = await load_tools(cfg.data_dir / "mcp.json") if profile.allow_mcp else ([], [])
+                native_names = {t.name for t in local.tools}
+                remote = [t for t in remote if t.name not in native_names
+                          and profile.allows_tool(t.name) and permits(profile.allow_mcp, t.name)]
                 for error in errors:
                     self.store.event(sid, "mcp_warning", error)
+                # Recover exact hook inputs/results from this run's committed tool receipts.
+                # They are independent of compacted context and survive service restarts.
+                with self.store.connect() as db:
+                    rows = db.execute("SELECT result FROM run_receipts WHERE run_id=? AND status='done' ORDER BY rowid", (rid,)).fetchall()
+                actions = [value['_harness_action'] for row in rows
+                           if isinstance((value := json.loads(row[0])), dict) and '_harness_action' in value]
+                async def check(phase, **extra):
+                    return await self.service.profiles.check(profile, phase,
+                        self.service.harness_context(session, cfg, profile, actions, run_id=rid, **extra))
 
                 @tool(args_schema=Question)
                 def ask_user_question(question: str, options: list[str] = [], reason: str = "") -> dict:
@@ -268,8 +282,12 @@ class RunManager:
                         raise ValueError('进展更新需为 1–1200 个字符')
                     return {'update': update.strip()}
 
-                tools = local.tools + remote + [ask_user_question, finish_research, report_progress]
+                tools = local.tools + remote + [t for t in (ask_user_question, finish_research, report_progress)
+                                               if profile.allows_tool(t.name)]
                 by_name = {t.name: t for t in tools}
+                if len(by_name) != len(tools):
+                    raise ValueError('Duplicate tool names')
+                self.service.tool_capabilities[sid] = frozenset(by_name)
                 bound = model.bind_tools(tools)
                 context = ContextManager(self.store, session, cfg)
                 schema_tokens = estimate_tokens([convert_to_openai_tool(t) for t in tools])
@@ -323,7 +341,13 @@ class RunManager:
                     substantive = any(c['name'] != 'report_progress' for c in response.tool_calls)
                     result['no_progress'] = 0 if substantive else state.get('no_progress', 0) + 1
                     if not response.tool_calls and not run["config"]["continuous"]:
-                        result.update(finished=True, outcome={"summary": text_content(response), "artifacts": [], "limitations": []})
+                        try:
+                            await check('completion', answer=text_content(response), deliverables=[])
+                            result.update(finished=True, outcome={"summary": text_content(response), "artifacts": [], "limitations": []})
+                        except HarnessViolation as exc:
+                            # A failed completion remains a resumable, explicit blocked task.
+                            result.update(finished=True, outcome={'paused': True, 'reason': 'harness',
+                                'summary': self.service.safe_error(exc), 'artifacts': [], 'limitations': ['未通过完成检查']})
                     elif result['no_progress'] >= 2:
                         result.update(finished=True, outcome={"paused": True, "reason": "no_progress",
                             "summary": "模型连续回复但未推进任务，已自动暂停以避免重复消耗。已有回复已保存，可补充要求后继续。"})
@@ -345,8 +369,11 @@ class RunManager:
                 async def human(state):
                     call = current_call(state)
                     try:
+                        if 'ask_user_question' not in by_name:
+                            raise ValueError('Tool is outside the configured capability profile: ask_user_question')
                         question = Question.model_validate(call["args"]).model_dump()
-                    except ValueError as exc:
+                        await check('before_tool', tool_name='ask_user_question', tool_input=call['args'])
+                    except (ValueError, PermissionError) as exc:
                         return self.db.commit(rid, "human:"+call["id"], {"cursor": state["cursor"]+1, "failures": state.get("failures", 0)+1},
                                               [ToolMessage(content=self.service.safe_error(exc), tool_call_id=call["id"], name="ask_user_question", status="error")])
                     payload = {**question, "question_id": call["id"], "run_id": rid, "session_id": sid}
@@ -355,6 +382,7 @@ class RunManager:
                     if not isinstance(answer, dict) or answer.get("question_id") != call["id"] or not str(answer.get("answer", "")).strip():
                         raise ValueError("回答与当前问题不匹配")
                     value = str(answer["answer"])
+                    await check('after_tool', tool_name='ask_user_question', tool_input=call['args'], tool_result={'answer': value})
                     result = {"cursor": state["cursor"]+1, "failures": 0,
                               "human_answers": state.get("human_answers", []) + ["关于“"+question["question"]+"”的回答："+value]}
                     return self.db.commit(rid, "human:"+call["id"], result, [
@@ -380,11 +408,17 @@ class RunManager:
                         self.db.begin_tool(rid, key)
                         try:
                             if name not in by_name:
-                                raise ValueError("Unknown tool: "+name)
-                            timeout = max(cfg.tool_timeout, 330) if name in {"run_python", "compile_latex", "plot_results"} else cfg.tool_timeout
+                                raise ValueError("Tool is outside the configured capability profile: "+name)
+                            await check('before_tool', tool_name=name, tool_input=call['args'])
+                            if name == 'finish_research':
+                                await check('completion', answer=call['args'].get('summary', ''),
+                                            deliverables=call['args'].get('artifacts', []))
+                            timeout = max(cfg.tool_timeout, 330) if name in {"run_python", "compile_latex", "plot_results", "figure_forge", "run_benchmark"} else cfg.tool_timeout
                             value = await asyncio.wait_for(by_name[name].ainvoke(call["args"]), timeout)
                             if isinstance(value, dict) and (value.get("ok") is False or value.get("status") == "error" or value.get("exit_code", 0) != 0):
                                 status = "error"
+                            if status == 'success':
+                                await check('after_tool', tool_name=name, tool_input=call['args'], tool_result=value)
                         except asyncio.CancelledError:
                             raise
                         except Exception as exc:
@@ -393,6 +427,9 @@ class RunManager:
                     raw = dumps(value)
                     content = raw if len(raw) <= 14000 else raw[:12000]+f"\n[Full output archived: event_id={event}. Use read_tool_result.]"
                     result = {"cursor": state["cursor"]+1, "failures": state.get("failures", 0)+1 if status == "error" else 0}
+                    action = {'name': name, 'input': call['args'], 'result': value, 'status': status}
+                    actions.append(action)
+                    result['_harness_action'] = action
                     if name == "finish_research" and status == "success":
                         result.update(finished=True, outcome=value)
                     messages = [ToolMessage(content=content, tool_call_id=call["id"], name=name, status=status)]

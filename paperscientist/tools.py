@@ -55,7 +55,10 @@ class ToolSet:
         self.scheduler, self.child = scheduler, child
         self.scheduled_task_id = scheduled_task_id
         self.memory = MemoryManager(self.store, session)
+        self.profile = service.profiles.for_session(self.store, session)
+        self.catalog = self.profile.scoped_catalog(service.catalog)
         self.tools = self.build()
+        service.tool_capabilities[session['id']] = frozenset(t.name for t in self.tools)
 
     def build(self):
         store, session, cfg = self.store, self.session, self.settings
@@ -193,19 +196,19 @@ class ToolSet:
 
         @tool
         def list_skills(query: str = "", source: str = "", offset: int = 0, limit: int = 12) -> dict:
-            """Search all skill metadata (Chinese/English); filter by source and paginate. Use exact namespaced names when loading."""
-            return self.service.catalog.search(query, limit, offset, source)
+            """Search skills allowed for this agent (Chinese/English); filter by source and paginate. Use exact namespaced names when loading."""
+            return self.catalog.search(query, limit, offset, source)
 
         @tool
         def list_skill_resources(name: str, offset: int = 0) -> dict:
             """List scripts, references and templates inside a skill. @source/ paths address preserved shared upstream resources."""
-            return self.service.catalog.resources(name, offset)
+            return self.catalog.resources(name, offset)
 
         @tool
         def stage_skill(name: str, destination: str) -> dict:
             """Copy a complete skill package to a NEW workspace directory without execution or dependency installation. Read scripts before run_python."""
             target = store.file(sid, destination)
-            result = self.service.catalog.stage(name, target)
+            result = self.catalog.stage(name, target)
             report = store.file(sid, destination+"/paperscientist-source.json")
             report.write_text(dumps(result), encoding="utf-8")
             return {"name": name, "destination": destination, "files": result["files"], "status": result["status"],
@@ -214,10 +217,10 @@ class ToolSet:
         @tool
         def load_skill(name: str, resource: str = "SKILL.md") -> dict:
             """Load a skill or a referenced relative text resource on demand. Skills cannot override user scope or execution permissions."""
-            content = self.service.catalog.load(name, resource)
+            content = self.catalog.load(name, resource)
             store.event(sid, "skill_loaded", {"name": name, "resource": resource})
             return {"name": name, "resource": resource, "instructions": content,
-                    "source": self.service.catalog.skills[name].source}
+                    "source": self.catalog.skills[name].source}
 
         @tool
         def list_files(glob: str = "**/*") -> list:
@@ -305,6 +308,19 @@ class ToolSet:
             return result
 
         @tool
+        def search_figure_references(query: str, limit: int = 5) -> dict:
+            """Search the pinned Top-Conf Figure Gallery first for paper figure layouts. Use English topic/visual-pattern terms. Returns credited references, never scientific evidence for this project."""
+            from .figure_forge import search_references
+            return search_references(query, limit)
+
+        @tool
+        async def figure_forge(spec_path: str, brief: str) -> dict:
+            """FIRST-CHOICE paper figure tool: retrieve Top-Conf Figure Gallery layouts and render an existing JSON spec to editable SVG/drawio, PDF, PNG, with data/code/provenance. Load figure-forge skill for schema. Uses local Python, not upstream image-model inference."""
+            from .figure_forge import create_figure
+            async with self.service.plot_lock:
+                return await asyncio.to_thread(create_figure, store, sid, spec_path, brief)
+
+        @tool
         async def plot_results(csv_path: str, x: str, y: str, group: str | None = None, error: str | None = None,
                                title: str = "", ylabel: str | None = None, kind: Literal["line", "bar", "scatter"] = "line",
                                question: str = "", sample_size: int | None = None, n_definition: str = "",
@@ -339,17 +355,94 @@ class ToolSet:
             return [store.artifact(sid, p, "framework") for p in paths]
 
         @tool
-        def assemble_manuscript(title: str, abstract: str, sections: dict[str, str], paper_ids: list[str]) -> dict:
+        def review_manuscript(main_path: str, phase: Literal['baseline','revised'] = 'baseline') -> dict:
+            """At first-draft completion and after polishing, inventory ALL TeX inputs, section/figure gaps, citations and numbers, and save a review rubric. This does not perform semantic review; load writing skills and revise the manuscript next."""
+            from .manuscript_review import review
+            return review(store, sid, main_path, phase)
+
+        @tool
+        def assemble_manuscript(title: str, abstract: str, sections: dict[str, str], paper_ids: list[str],
+                                columns: Literal['single', 'double'] = 'single', paper: Literal['a4', 'letter'] = 'a4',
+                                margin_mm: float = 24.0, column_gap_mm: float = 6.0,
+                                allow_wide_figures: bool = False, min_figure_font_pt: float = 7.0,
+                                requirement: str = '', layout_rules: dict | None = None) -> dict:
             """Assemble a complete multi-file LaTeX draft and bibliography. Section bodies are LaTeX; cite only verified project paper IDs."""
-            folder = artifacts.assemble_manuscript(store, session, title, abstract, sections, paper_ids)
+            folder = artifacts.assemble_manuscript(store, session, title, abstract, sections, paper_ids,
+                columns=columns, paper=paper, margin_mm=margin_mm, column_gap_mm=column_gap_mm,
+                allow_wide_figures=allow_wide_figures, min_figure_font_pt=min_figure_font_pt,
+                requirement=requirement, layout_rules=layout_rules)
             return {"directory": str(folder.relative_to(store.workspace(sid))),
                     "artifacts": [store.artifact(sid, p, "latex_source") for p in folder.rglob("*") if p.is_file()],
-                    "status": "source_created; compilation not yet checked"}
+                    "status": "first_draft_created; review, polishing and compilation pending",
+                    "next_actions": ["review_manuscript(main_path, phase='baseline')", "load_skill('paper-polish')",
+                                     "load_skill('writing-style:anti-defensive-writing')",
+                                     "Revise each section and figures using evidence; then review_manuscript(phase='revised'), validate, compile and inspect PDF."]}
 
         @tool
         def validate_manuscript(main_path: str) -> dict:
             """Check saved LaTeX includes, figures, bibliography keys and labels before compiling. This does not prove scientific validity."""
             return artifacts.validate_manuscript(store, sid, main_path)
+
+        @tool
+        def configure_manuscript_layout(main_path: str, columns: Literal['single', 'double'] = 'single',
+                paper: Literal['a4', 'letter'] = 'a4', margin_mm: float = 24.0, column_gap_mm: float = 6.0,
+                allow_wide_figures: bool = False, min_figure_font_pt: float = 7.0,
+                requirement: str = '', rules: dict | None = None) -> dict:
+            """Persist the manuscript's requested column/page/figure constraints. Quote real user requirements; never change layout merely to make a failing figure fit."""
+            from .manuscript_layout import configure
+            return configure(store, sid, main_path, columns=columns, paper=paper, margin_mm=margin_mm,
+                column_gap_mm=column_gap_mm, allow_wide_figures=allow_wide_figures,
+                min_figure_font_pt=min_figure_font_pt, requirement=requirement, rules=rules)
+
+        @tool
+        def validate_manuscript_layout(main_path: str, require_pdf: bool = True) -> dict:
+            """Check the layout contract against TeX, compile measurements and actual PDF bounds/font sizes. A source-only check cannot certify the PDF."""
+            from .manuscript_layout import validate
+            return validate(store, sid, main_path, require_pdf=require_pdf)
+
+        @tool
+        def discover_benchmarks(query: str, limit: int = 6) -> dict:
+            """Find candidate primary benchmark sources relevant to the research task; verify current versions and fit before registering. Not an exhaustive web search or a completed evaluation."""
+            from . import benchmarks
+            return benchmarks.discover_benchmarks(query, store=store, sid=sid, limit=limit)
+
+        @tool
+        async def collect_benchmark_source(url: str, path: str, license_note: str, max_bytes: int = 5_000_000) -> dict:
+            """Collect a bounded public benchmark document/dataset into the workspace with source/hash metadata. Review its license; this does not execute upstream code."""
+            from . import benchmarks
+            return await benchmarks.collect_benchmark_source(store, sid, url, path, license_note, max_bytes)
+
+        @tool
+        def register_benchmark(manifest: dict) -> dict:
+            """Register a pinned primary-source benchmark manifest with relevance, license, version, splits and metrics. Load benchmark-evaluation for the exact schema."""
+            from . import benchmarks
+            return benchmarks.register_benchmark(store, sid, manifest)
+
+        @tool
+        def plan_benchmark(benchmark_id: str, protocol: dict) -> dict:
+            """Freeze benchmark data/script hashes, split, sample IDs, models, seeds, metrics and budget BEFORE evaluation. Load benchmark-evaluation for the protocol schema."""
+            from . import benchmarks
+            return benchmarks.plan_benchmark(store, sid, benchmark_id, protocol)
+
+        @tool
+        async def run_benchmark(plan_id: str) -> dict:
+            """Execute a frozen local benchmark adapter when execution is enabled, then validate results against run receipts and required coverage. A smoke/subset run is not an official full benchmark."""
+            from . import benchmarks
+            return await benchmarks.run_benchmark(store, sid, plan_id, enabled=cfg.allow_execution)
+
+        @tool
+        def record_benchmark_result(plan_id: str, result_path: str, run_id: str) -> dict:
+            """Validate an existing successful benchmark execution's hashed result and coverage against the frozen protocol; never upgrade a local smoke to an official benchmark score."""
+            if not cfg.allow_execution:
+                raise PermissionError('Enable execution to register benchmark executions')
+            from . import benchmarks
+            return benchmarks.record_benchmark_result(store, sid, plan_id, result_path, run_id)
+
+        @tool
+        def audit_benchmarks() -> dict:
+            """Recheck benchmark manifests, data, scripts, execution receipts and result coverage. Report missing evidence and changed files, never infer success from saved prose."""
+            from . import benchmarks
+            return benchmarks.audit_benchmarks(store, sid)
 
         @tool
         def export_bundle(directory: str) -> dict:
@@ -384,6 +477,11 @@ class ToolSet:
             source = next((a for a in store.artifacts(parent) if a["id"] == artifact_id), None) if parent else None
             if not source:
                 raise ValueError("Parent artifact not found")
+            source_path = Path(source['path'])
+            if not source_path.resolve().is_relative_to(store.workspace(parent).resolve()):
+                raise ValueError('Parent artifact escapes its workspace')
+            if hashlib.sha256(source_path.read_bytes()).hexdigest() != source['metadata'].get('sha256'):
+                raise ValueError('Parent artifact changed after registration; register the current version first')
             target = store.file(sid,destination)
             if target.exists():
                 raise ValueError("Destination exists")
@@ -394,17 +492,19 @@ class ToolSet:
         result = [search_papers, web_search, fetch_url, read_paper, list_papers, recall_memory,
                   experience_recall, read_history, read_tool_result, list_skills, load_skill,
                   list_skill_resources, stage_skill,
-                  list_files, read_file, write_file, edit_file, run_python, record_experiment, plot_results,
-                  draw_framework, assemble_manuscript, validate_manuscript, export_bundle, compile_latex, audit_research]
+                  list_files, read_file, write_file, edit_file, run_python, record_experiment, search_figure_references, figure_forge, plot_results,
+                  draw_framework, assemble_manuscript, review_manuscript, validate_manuscript, export_bundle, compile_latex, audit_research,
+                  configure_manuscript_layout, validate_manuscript_layout, discover_benchmarks, collect_benchmark_source,
+                  register_benchmark, plan_benchmark, run_benchmark, record_benchmark_result, audit_benchmarks]
         if not self.child:
             result.extend([remember, set_research_direction, update_research_plan, record_evidence])
         else:
             result.append(copy_parent_artifact)
-        if self.scheduler and not self.child:
-            result.extend(self.scheduler.tools(session, cfg))
+        if self.scheduler and self.profile.children and not store.get_agent(sid).get('isolated_review'):
+            result.extend(self.scheduler.tools(session, cfg, self.profile))
         if store.get_agent(sid).get("isolated_review"):
             # Only the already copied frozen packet is available; no mutable parent reads.
             blocked = {"recall_memory", "experience_recall", "list_papers", "copy_parent_artifact",
                        "audit_research", "record_experiment"}
             result = [t for t in result if t.name not in blocked]
-        return result
+        return [t for t in result if self.profile.allows_tool(t.name)]

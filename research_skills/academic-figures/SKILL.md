@@ -7,7 +7,7 @@ description: Produce publication-style matplotlib figures from measured data wit
 
 Identify the scientific question the figure answers and inspect the source data and provenance. Choose a line plot for ordered variation, scatter for relationships, or bars for discrete comparisons. Do not invent missing data, confidence intervals or favorable axes.
 
-Use plot_results for standard plots or write a Python script for specialized layouts. Keep units and labels explicit, fonts readable at final paper size, colors accessible, and method ordering consistent. Use direct labels or a concise legend. State what each error bar means, how many repetitions it covers and how it was calculated.
+First load figure-forge, retrieve related Top-Conf Figure Gallery layouts with search_figure_references, and use figure_forge for multi-panel plots and editable frameworks. Use plot_results or a specialized Python script only for unsupported requirements, with the reason stated. Keep units and labels explicit, fonts readable at final paper size, colors accessible, and method ordering consistent. Use direct labels or a concise legend. State what each error bar means, how many repetitions it covers and how it was calculated.
 
 Preserve CSV/JSON inputs, a Python plotting script and PDF/SVG plus 300-DPI PNG. View generated output; check labels, clipped content, legend collisions and whether axis ranges distort comparisons. The caption should state the question, observation and uncertainty without overstating causality.
 

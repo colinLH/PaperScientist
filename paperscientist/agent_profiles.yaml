@@ -1,0 +1,421 @@
+version: 1
+aliases:
+  researcher: literature
+  methodologist: ideation
+  engineer: design
+  analyst: evaluation
+  writer: writing
+profiles:
+  orchestrator:
+    description: Main research coordinator and direct user requests
+    prompt: Coordinate substantial stages using the relevant specialists. Integrate evidence and artifact IDs, reconcile
+      conflicting results, and ask the user when a key decision is missing. Direct simple user requests may use
+      available native tools. Delegate parallel independent subtasks and inspect outputs before importing them.
+    tools:
+    - '*'
+    skills:
+    - '*'
+    children:
+    - literature
+    - ideation
+    - design
+    - evaluation
+    - writing
+    - reviewer
+    harnesses:
+    - name: manuscript_layout
+      phases:
+      - after_tool
+      - completion
+    - name: benchmark_evidence
+      phases:
+      - completion
+    mcp_tools:
+    - '*'
+  literature:
+    description: Literature discovery, reading, related work and evidence mapping
+    prompt: Find primary literature, read full papers when needed, distinguish abstracts from verified text, and
+      return sourced comparisons and gaps. Split independent searches between search agents; use general leaves
+      for bounded synthesis.
+    tools:
+    - cancel_agent
+    - copy_parent_artifact
+    - discover_benchmarks
+    - edit_file
+    - experience_recall
+    - fetch_url
+    - followup_task
+    - import_agent_artifact
+    - list_agent_profiles
+    - list_agents
+    - list_files
+    - list_papers
+    - list_skill_resources
+    - list_skills
+    - load_skill
+    - read_agent
+    - read_file
+    - read_history
+    - read_paper
+    - read_tool_result
+    - recall_memory
+    - search_papers
+    - send_message
+    - spawn_agent
+    - stage_skill
+    - wait_agent
+    - web_search
+    - write_file
+    - collect_benchmark_source
+    skills:
+    - academic:deep-research
+    - adaptive-research
+    - evidence-review
+    - literature-review
+    - research:citation-management
+    - research:deep-research
+    - research:github-research
+    - research:literature-review
+    - research:literature-search
+    - research:related-work-writing
+    - scientific:literature-review
+    - scientific:research-lookup
+    children:
+    - search
+    - general
+    harnesses: []
+  ideation:
+    description: Research ideas, motivation, novelty and feasibility validation
+    prompt: Ground each idea in prior work. Explain motivation and challenges with a concrete example, identify
+      falsifiable contributions and alternative explanations, and propose feasible evidence. Do not claim novelty
+      from an unsuccessful search.
+    tools:
+    - audit_benchmarks
+    - audit_research
+    - cancel_agent
+    - copy_parent_artifact
+    - discover_benchmarks
+    - edit_file
+    - experience_recall
+    - fetch_url
+    - followup_task
+    - import_agent_artifact
+    - list_agent_profiles
+    - list_agents
+    - list_files
+    - list_papers
+    - list_skill_resources
+    - list_skills
+    - load_skill
+    - read_agent
+    - read_file
+    - read_history
+    - read_paper
+    - read_tool_result
+    - recall_memory
+    - review_manuscript
+    - search_papers
+    - send_message
+    - spawn_agent
+    - stage_skill
+    - wait_agent
+    - web_search
+    - write_file
+    skills:
+    - evidence-review
+    - experiment-design
+    - literature-review
+    - method-design
+    - orchestra:brainstorming-research-ideas
+    - orchestra:creative-thinking-for-research
+    - research-ideation
+    - research:idea-generation
+    - research:literature-search
+    - research:math-reasoning
+    - research:novelty-assessment
+    - research:research-planning
+    children:
+    - search
+    - general
+    harnesses: []
+  design:
+    description: System design, implementation and meaningful unit tests
+    prompt: Connect modules to the claimed innovations and challenges. Implement in the isolated workspace, add
+      meaningful unit tests for changed behavior and failure cases, run them and return actual diagnostics. Separate
+      design-only proposals from implemented and tested behavior.
+    tools:
+    - cancel_agent
+    - configure_manuscript_layout
+    - copy_parent_artifact
+    - draw_framework
+    - edit_file
+    - fetch_url
+    - figure_forge
+    - followup_task
+    - import_agent_artifact
+    - list_agent_profiles
+    - list_agents
+    - list_files
+    - list_papers
+    - list_skill_resources
+    - list_skills
+    - load_skill
+    - read_agent
+    - read_file
+    - read_history
+    - read_paper
+    - read_tool_result
+    - run_python
+    - search_figure_references
+    - search_papers
+    - send_message
+    - spawn_agent
+    - stage_skill
+    - validate_manuscript_layout
+    - wait_agent
+    - web_search
+    - write_file
+    skills:
+    - academic-figures
+    - figure-forge
+    - literature-review
+    - method-design
+    - research:algorithm-design
+    - research:atomic-decomposition
+    - research:code-debugging
+    - research:experiment-code
+    - research:literature-search
+    - research:math-reasoning
+    - research:paper-to-code
+    - research:symbolic-equation
+    - scientific-python
+    children:
+    - search
+    - general
+    harnesses:
+    - name: implementation_tests
+      phases:
+      - completion
+  evaluation:
+    description: Benchmark selection, experiments, statistical evaluation and figures
+    prompt: Select relevant public benchmarks, verify access and license and fit to hypotheses, plan baselines/ablations
+      and uncertainty, run only permitted experiments, preserve raw results and failure cases, and map each conclusion
+      to measured evidence.
+    tools:
+    - audit_benchmarks
+    - audit_research
+    - cancel_agent
+    - copy_parent_artifact
+    - discover_benchmarks
+    - edit_file
+    - fetch_url
+    - figure_forge
+    - followup_task
+    - import_agent_artifact
+    - list_agent_profiles
+    - list_agents
+    - list_files
+    - list_papers
+    - list_skill_resources
+    - list_skills
+    - load_skill
+    - plan_benchmark
+    - plot_results
+    - read_agent
+    - read_file
+    - read_history
+    - read_paper
+    - read_tool_result
+    - recall_memory
+    - record_experiment
+    - register_benchmark
+    - run_benchmark
+    - run_python
+    - search_figure_references
+    - search_papers
+    - send_message
+    - spawn_agent
+    - stage_skill
+    - validate_manuscript_layout
+    - wait_agent
+    - web_search
+    - write_file
+    - collect_benchmark_source
+    - record_benchmark_result
+    skills:
+    - academic-figures
+    - evidence-review
+    - experiment-design
+    - figure-forge
+    - literature-review
+    - research:data-analysis
+    - research:experiment-code
+    - research:experiment-design
+    - research:figure-generation
+    - research:literature-search
+    - research:table-generation
+    - scientific-python
+    - scientific:matplotlib
+    - scientific:statistical-analysis
+    - scientific:statistical-power
+    - sciplot:*
+    - benchmark-evaluation
+    children:
+    - search
+    - general
+    harnesses:
+    - name: benchmark_evidence
+      phases:
+      - completion
+  writing:
+    description: Evidence-grounded manuscript writing, polishing and layout validation
+    prompt: Develop introduction, background, example-driven motivation and challenges, an overall architecture,
+      contribution-linked design details, evaluation setup/questions/results and limitations. Preserve evidence
+      when polishing. Validate the selected column layout, figure sizes and final PDF before declaring the manuscript
+      ready.
+    tools:
+    - assemble_manuscript
+    - audit_benchmarks
+    - audit_research
+    - cancel_agent
+    - compile_latex
+    - configure_manuscript_layout
+    - copy_parent_artifact
+    - draw_framework
+    - edit_file
+    - export_bundle
+    - fetch_url
+    - figure_forge
+    - followup_task
+    - import_agent_artifact
+    - list_agent_profiles
+    - list_agents
+    - list_files
+    - list_papers
+    - list_skill_resources
+    - list_skills
+    - load_skill
+    - plot_results
+    - read_agent
+    - read_file
+    - read_history
+    - read_paper
+    - read_tool_result
+    - recall_memory
+    - review_manuscript
+    - search_figure_references
+    - search_papers
+    - send_message
+    - spawn_agent
+    - stage_skill
+    - validate_manuscript
+    - validate_manuscript_layout
+    - wait_agent
+    - web_search
+    - write_file
+    skills:
+    - academic-figures
+    - evidence-review
+    - figure-forge
+    - latex-writing
+    - literature-review
+    - manuscript-quality
+    - paper-polish
+    - research:latex-formatting
+    - research:literature-search
+    - research:paper-assembly
+    - research:paper-compilation
+    - research:paper-revision
+    - research:paper-writing-section
+    - research:related-work-writing
+    - research:self-review
+    - research:table-generation
+    - scientific:scientific-writing
+    - writing-coach:*
+    - writing-style:anti-defensive-writing
+    children:
+    - search
+    - general
+    harnesses:
+    - name: manuscript_layout
+      phases:
+      - after_tool
+      - completion
+  reviewer:
+    description: Independent scientific review and evidence audit
+    prompt: Review supplied evidence critically, distinguish measured results from claims, and return actionable
+      findings with file and evidence references. Isolated reviews must use only their frozen packet; no peer reports
+      or inherited project context.
+    tools:
+    - audit_benchmarks
+    - audit_research
+    - copy_parent_artifact
+    - edit_file
+    - fetch_url
+    - list_files
+    - list_papers
+    - list_skill_resources
+    - list_skills
+    - load_skill
+    - read_file
+    - read_history
+    - read_paper
+    - read_tool_result
+    - review_manuscript
+    - search_papers
+    - stage_skill
+    - validate_manuscript
+    - validate_manuscript_layout
+    - web_search
+    - write_file
+    skills:
+    - evidence-review
+    - independent-review
+    - manuscript-quality
+    - scientific:peer-review
+    - orchestra:rigor-reviewer
+    - academic:academic-paper-reviewer
+    - research:self-review
+    children: []
+    harnesses: []
+  search:
+    description: Fine-grained search leaf
+    prompt: Complete one bounded primary-source search or reading task. Return source URLs, what was actually read,
+      and uncertainty. Use only the capabilities inherited from the specialist.
+    tools:
+    - copy_parent_artifact
+    - discover_benchmarks
+    - edit_file
+    - fetch_url
+    - list_files
+    - list_papers
+    - list_skill_resources
+    - list_skills
+    - load_skill
+    - read_file
+    - read_history
+    - read_paper
+    - read_tool_result
+    - search_papers
+    - stage_skill
+    - web_search
+    - write_file
+    skills:
+    - literature-review
+    - research:literature-search
+    - research:literature-review
+    - research:github-research
+    - scientific:research-lookup
+    children: []
+    harnesses: []
+  general:
+    description: Bounded specialist helper inheriting parent capabilities
+    prompt: Complete one narrowly assigned subtask in your isolated workspace. Your tools, skills and quality checks
+      are capped by the parent specialist. Return evidence and artifact IDs, and do not delegate further.
+    tools:
+    - '*'
+    skills:
+    - '*'
+    children: []
+    harnesses: []
+    inherit_parent: true

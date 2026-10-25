@@ -5,15 +5,16 @@ import hashlib
 import re
 import shutil
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated
 
 from pydantic import Field
 
 from langchain_core.tools import tool
 
 from .memory import text_content
-from .prompts import ROLES
+from .agent_profiles import COORDINATION_TOOLS
 from .store import dumps, now
 
 
@@ -25,6 +26,37 @@ class Scheduler:
         self.tasks = {}
         self.mailboxes = {}
         self.slots = asyncio.Semaphore(service.settings.max_subagents)
+
+    @asynccontextmanager
+    async def operation(self, session, tool_name=None):
+        """Lease only active child work, never a parent's wait/spawn operation."""
+        if not session.get('parent_id') or tool_name in COORDINATION_TOOLS:
+            yield
+        else:
+            async with self.slots:
+                yield
+
+    def descendants(self, parent_id):
+        result, pending, seen = [], [parent_id], {parent_id}
+        while pending:
+            for child in self.store.agents(pending.pop()):
+                if child['id'] in seen:
+                    continue
+                seen.add(child['id'])
+                result.append(child)
+                pending.append(child['id'])
+        return result
+
+    def ancestry(self, session):
+        depth, root, seen = 0, session['id'], set()
+        current = session
+        while current.get('parent_id'):
+            if current['id'] in seen:
+                raise ValueError('Cyclic agent hierarchy')
+            seen.add(current['id'])
+            depth, root = depth+1, current['parent_id']
+            current = self.store.get_session(root)
+        return depth, root
 
     def find(self, parent_id, target):
         agent = next((a for a in self.store.agents(parent_id) if target in {a["id"], a["task_name"]}), None)
@@ -42,19 +74,21 @@ class Scheduler:
 
         async def run():
             try:
-                async with self.slots:
-                    agent.update(status="running", updated_at=now())
-                    self.store.save_agent(agent)
-                    await self.service.emit_to(parent["id"], "subagent", agent.copy())
-                    result = await self.service.run_turn(agent["id"], message, settings=settings,
-                        user_id=parent["user_id"], project_id=parent["project_id"],
-                        parent_id=parent["id"], role=agent["role"])
-                    agent.update(status="completed" if result.get("stop_reason", "completed") == "completed" else "interrupted",
-                                 result=result["content"], stop_reason=result.get("stop_reason", "completed"), updated_at=now())
+                agent.update(status="running", updated_at=now())
+                self.store.save_agent(agent)
+                await self.service.emit_to(parent["id"], "subagent", agent.copy())
+                result = await self.service.run_turn(agent["id"], message, settings=settings,
+                    user_id=parent["user_id"], project_id=parent["project_id"],
+                    parent_id=parent["id"], role=agent["role"])
+                agent.update(status="completed" if result.get("stop_reason", "completed") == "completed" else "interrupted",
+                             result=result["content"], artifacts=result.get('artifacts', []),
+                             stop_reason=result.get("stop_reason", "completed"), updated_at=now())
             except asyncio.CancelledError:
+                await self.cancel_parent(agent['id'])
                 agent.update(status="cancelled", error="Cancelled; persisted history can be resumed", updated_at=now())
                 raise
             except Exception as exc:
+                await self.cancel_parent(agent['id'])
                 agent.update(status="error", error=self.service.safe_error(exc), updated_at=now())
             finally:
                 self.store.save_agent(agent)
@@ -63,7 +97,7 @@ class Scheduler:
         return agent
 
     async def cancel_parent(self, parent_id):
-        tasks = [self.tasks[a["id"]] for a in self.store.agents(parent_id)
+        tasks = [self.tasks[a["id"]] for a in self.descendants(parent_id)
                  if a["id"] in self.tasks and not self.tasks[a["id"]].done()]
         for task in tasks:
             task.cancel()
@@ -77,28 +111,54 @@ class Scheduler:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
-    def tools(self, parent, settings):
+    def tools(self, parent, settings, profile=None):
         parent_id = parent["id"]
+        profile = profile or self.service.profiles.for_session(self.store, parent)
+
+        @tool
+        def list_agent_profiles() -> list:
+            """Discover this parent's permitted specialist/leaf profiles and their scoped tools, skills and checks."""
+            result = []
+            for name in sorted(profile.children):
+                child, ceiling = delegation(name)
+                metadata = child.metadata()
+                metadata.update(tools=ceiling['tools'], skills=ceiling['skills'])
+                result.append(metadata)
+            return result
+
+        def delegation(role):
+            if parent_id not in self.service.tool_capabilities:
+                # Public scheduler tools can be used directly, without a prior model binding.
+                from .tools import ToolSet
+                ToolSet(self.service, parent, settings, self, bool(parent.get('parent_id')))
+            names = set(self.service.tool_capabilities.get(parent_id, ()))
+            # An orchestrator may pass artifacts into its child even though it has no parent itself.
+            if not parent.get('parent_id') and profile.allows_tool('copy_parent_artifact'):
+                names.add('copy_parent_artifact')
+            return self.service.profiles.delegate(profile, role, names, self.service.catalog)
 
         @tool
         async def spawn_agent(task_name: Annotated[str, Field(pattern=r"^[a-z0-9_-]{1,40}$", description="Unique lowercase English task name, e.g. experiment-review")],
-                              message: str, role: Literal["researcher", "methodologist", "engineer", "analyst", "writer", "reviewer"] = "researcher",
+                              message: str, role: str = "researcher",
                               fork_context: bool = False, isolated_review: bool = False,
                               artifact_ids: list[str] | None = None) -> dict:
             """Delegate a substantial subtask. For blind reviews set role=reviewer, isolated_review=true and explicit source artifact_ids: only a frozen packet is copied, with no inherited memory/project or peer artifacts."""
-            if not re.fullmatch(r"[a-z0-9_-]{1,40}", task_name) or role not in ROLES:
-                raise ValueError("task_name must use 1–40 lowercase English letters, digits, underscores or hyphens; role must be a listed role")
+            if not re.fullmatch(r"[a-z0-9_-]{1,40}", task_name):
+                raise ValueError("task_name must use 1–40 lowercase English letters, digits, underscores or hyphens")
+            child_profile, capabilities = delegation(role)
+            depth, root = self.ancestry(parent)
+            if depth >= settings.max_agent_depth:
+                raise ValueError('Agent hierarchy depth budget reached')
             agents = self.store.agents(parent_id)
             if any(a["task_name"] == task_name for a in agents):
                 raise ValueError("Task name exists; use followup_task to resume")
-            if sum(a["status"] in {"queued", "running"} for a in agents) >= settings.max_subagents:
-                raise ValueError("Subagent concurrency budget reached; wait for an existing child")
-            if len(agents) >= 24:
-                raise ValueError("Session child-agent budget reached; resume an existing child")
-            if isolated_review and (role != "reviewer" or fork_context):
+            if len(self.descendants(root)) >= settings.max_agent_tasks:
+                raise ValueError("Research tree agent budget reached; resume an existing child")
+            if isolated_review and (child_profile.name != "reviewer" or fork_context):
                 raise ValueError("Isolated review requires reviewer role and fork_context=false")
             agent = {"id": "child_"+uuid.uuid4().hex, "parent_id": parent_id, "task_name": task_name,
-                     "role": role, "created_at": now(), "status": "queued"}
+                     "role": child_profile.name, "capabilities": capabilities,
+                     "depth": depth+1, "root_id": root, "created_at": now(), "status": "queued"}
             if isolated_review:
                 selected = {a["id"]: a for a in self.store.artifacts(parent_id)}
                 if not artifact_ids or any(aid not in selected for aid in artifact_ids):
@@ -153,7 +213,10 @@ class Scheduler:
         @tool
         async def followup_task(target: str, message: str) -> dict:
             """Resume a completed, interrupted, errored or cancelled child using its durable history and workspace."""
-            return self.launch(parent, settings, self.find(parent_id, target), message)
+            agent = self.find(parent_id, target)
+            if self.service.profiles.get(agent['role']).name not in profile.children:
+                raise PermissionError('This profile no longer permits that child role')
+            return self.launch(parent, settings, agent, message)
 
         @tool
         def send_message(target: str, message: str) -> dict:
@@ -169,6 +232,7 @@ class Scheduler:
         async def cancel_agent(target: str) -> dict:
             """Cancel a running child while preserving its transcript and files for follow-up."""
             agent = self.find(parent_id, target)
+            await self.cancel_parent(agent['id'])
             task = self.tasks.get(agent["id"])
             if task and not task.done():
                 task.cancel()
@@ -185,9 +249,14 @@ class Scheduler:
             dest = self.store.file(parent_id, destination)
             if dest.exists():
                 raise ValueError("Destination exists")
+            source_path = Path(source['path'])
+            if not source_path.resolve().is_relative_to(self.store.workspace(agent['id']).resolve()):
+                raise ValueError('Child artifact escapes its workspace')
+            if hashlib.sha256(source_path.read_bytes()).hexdigest() != source['metadata'].get('sha256'):
+                raise ValueError('Child artifact changed after registration; register the current version first')
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source["path"], dest)
             return self.store.artifact(parent_id, dest, source["kind"], {**source["metadata"],
                 "source_child":agent["id"], "source_artifact":artifact_id})
 
-        return [spawn_agent, list_agents, wait_agent, read_agent, followup_task, send_message, cancel_agent, import_agent_artifact]
+        return [list_agent_profiles, spawn_agent, list_agents, wait_agent, read_agent, followup_task, send_message, cancel_agent, import_agent_artifact]

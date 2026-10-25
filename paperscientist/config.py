@@ -19,6 +19,9 @@ class Settings:
     output_tokens: int = 4096
     max_steps: int = 24
     max_subagents: int = 3
+    max_agent_depth: int = 2
+    max_agent_tasks: int = 64
+    agent_profiles_path: Path | None = None
     tool_timeout: float = 90
     allow_execution: bool = False
     extract_memory: bool = True
@@ -45,6 +48,9 @@ class Settings:
             output_tokens=int(values.get("PS_OUTPUT_TOKENS", 4096)),
             max_steps=int(values.get("PS_MAX_STEPS", 24)),
             max_subagents=int(values.get("PS_MAX_SUBAGENTS", 3)),
+            max_agent_depth=int(values.get("PS_MAX_AGENT_DEPTH", 2)),
+            max_agent_tasks=int(values.get("PS_MAX_AGENT_TASKS", 64)),
+            agent_profiles_path=Path(values["PS_AGENT_PROFILES"]).expanduser().resolve() if values.get("PS_AGENT_PROFILES") else None,
             tool_timeout=float(values.get("PS_TOOL_TIMEOUT", 90)),
             allow_execution=values.get("PS_ALLOW_EXECUTION", "false").lower() == "true",
             extract_memory=values.get("PS_EXTRACT_MEMORY", "true").lower() == "true",
@@ -61,6 +67,8 @@ class Settings:
             raise ValueError("context_tokens must be between 2048 and 2000000")
         if not 1 <= result.max_steps <= 100 or not 1 <= result.max_subagents <= 8:
             raise ValueError("Invalid agent budget")
+        if not 1 <= result.max_agent_depth <= 5 or not 1 <= result.max_agent_tasks <= 256:
+            raise ValueError("Invalid agent hierarchy budget")
         if not 256 <= result.output_tokens < result.context_tokens:
             raise ValueError("output_tokens must fit inside context_tokens")
         return result

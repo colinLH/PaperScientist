@@ -115,7 +115,8 @@ python -m paperscientist.refine SESSION_ID --apply
 ## 开发与测试
 
 ```powershell
-python -m unittest discover -s tests -v
+python -m pip install -r requirements-dev.txt
+python -m pytest tests -q
 # 前端交互、动画和音频检查（需要 Node.js）
 node --test tests/frontend_effects.test.cjs tests/intro_motion.test.mjs tests/intro_audio.test.mjs tests/intro_hands.test.mjs
 # 显式设置 DEEPSEEK_API_KEY 后执行真实模型验证（会调用付费 API）
@@ -135,3 +136,11 @@ API 文档：启动后访问 `/docs`。主要接口为 `/api/chat/{sid}`（SSE�
 网页保留动态视觉效果，并对滚动、流式增量渲染和服务内存进行了优化。实测数据、复现方法及本地模型启动选项见 [Web 性能验证](docs/ui-performance.md)。
 
 首页新增可正反向滚动的六幕景深开场与渐变配乐，Start 进入工作台；可用 `/?workspace=1` 直接进入。音乐来源、低开销策略、发送／停止按钮及进展展示说明见 [开场与交互验证](docs/cinematic-entrance.md)。
+
+科研环节可由主代理动态委派给文献、构思、设计实现、实验和写作专家，各自使用独立的工具与技能范围；专家可继续并行调用检索或通用叶子任务。角色提示词、权限和检查可由操作者扩展，见 [专家代理与 harness](docs/agent_capabilities.md)。
+
+完整初稿会进入章节论证、实验覆盖、学术润色和 `anti-defensive-writing` 的优化流程。绘图优先使用 Top-Conf Figure Gallery 参考检索与本地可重现矢量绘图适配器，见 [论文质量与绘图](docs/research-quality-upgrade.md)。单/双栏、页面、图表宽度和有效字号由 [版式契约与 PDF 检查](docs/manuscript-layout.md) 约束；源码编译成功不等于版式合格。
+
+相关课题先评估公共 benchmark 的适用性，再固定版本、数据、划分、指标和预算，登记协议并执行带收据的评测。入口与真实结果格式见 [benchmark-evaluation](research_skills/benchmark-evaluation/SKILL.md)。本地合成 smoke、选定子集和官方完整基准成绩严格区分。
+
+提交、推送和每日开发记录遵循 [交付记录规则](docs/development-delivery.md)。

@@ -11,4 +11,6 @@ Include comparable training budgets, hyperparameter search budgets and compute r
 
 Cover effectiveness, component ablations, robustness/generalization, efficiency and failure analysis only when relevant to the claim. Justify each experiment by the question it answers, rather than collecting decorative plots.
 
+Load manuscript-quality/venue-patterns.md. The evaluation section should preview its research questions, then give setup/protocol before findings. Include selection criteria, exclusions/failures, version/tuning parity, leakage controls, metric definitions/directions/units, hardware/software and sampling/uncertainty definitions. Use real-data multi-panel figures with figure-forge to expose outcome composition, subgroup/fault differences and cost tradeoffs where supported. A controlled case grid does not justify IID confidence intervals. Clearly separate measured synthetic workloads from deployment-level scientific evidence.
+
 Save the protocol and executable configuration before running. Start with a labelled smoke test for pipeline correctness. A synthetic or toy run cannot establish performance on the research problem. Use record_experiment with the correct provenance and a successful run ID for measured outputs.

@@ -24,7 +24,7 @@ def category(name):
         return 'read', '查看文件', 'file'
     if name in {'run_python', 'compile_latex'}:
         return 'execute', '运行与验证', 'terminal'
-    if name in {'plot_results', 'draw_framework', 'validate_manuscript', 'export_bundle'}:
+    if name in {'figure_forge', 'review_manuscript', 'plot_results', 'draw_framework', 'validate_manuscript', 'export_bundle'}:
         return 'artifact', '生成与检查产物', 'chart'
     if any(x in name for x in ('subagent', 'agent_task', 'spawn', 'delegate')):
         return 'agent', '子代理协作', 'agents'

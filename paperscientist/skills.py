@@ -15,7 +15,10 @@ ALIASES = {
     "审稿": "peer review reviewer evidence", "返修": "rebuttal response revision",
     "引用": "citation verification", "统计": "statistical uncertainty analysis",
     "绘图": "figure plot visualization", "图表": "figure plot visualization",
-    "框架图": "drawio diagram architecture", "流程图": "drawio diagram",
+    "框架图": "figure forge drawio diagram architecture", "流程图": "figure forge drawio diagram",
+    "去AI味": "anti defensive writing", "去ai味": "anti defensive writing",
+    "论文画图": "figure forge", "初稿": "manuscript quality polish",
+    "前端": "frontend design", "美工": "frontend design",
     "写作": "writing manuscript", "润色": "polishing writing",
     "生物": "biology biopython", "化学": "chemistry chembl rdkit",
     "材料": "materials pymatgen", "复现": "reproducibility experiment code",
@@ -79,6 +82,13 @@ class SkillCatalog:
                 except Exception as exc:
                     self.errors.append({"path": str(path), "error": str(exc)})
 
+    def scoped(self, permits):
+        """Return a capability view; every metadata/resource/staging API shares it."""
+        view = object.__new__(SkillCatalog)
+        view.skills = {name: skill for name, skill in self.skills.items() if permits(name)}
+        view.errors = []  # Do not leak paths or metadata belonging to other profiles.
+        return view
+
     def search(self, query="", limit=20, offset=0, source=""):
         expanded = query.lower()
         for term, synonyms in ALIASES.items():
@@ -101,7 +111,7 @@ class SkillCatalog:
                 "next_offset": offset+limit if offset+limit < len(ranked) else None}
 
     def listing(self, max_chars=10000):
-        lines = [f"{len(self.skills)} skills installed. Use list_skills(query, source, offset) to search ALL metadata.",
+        lines = [f"{len(self.skills)} skills available in this agent scope. Use list_skills(query, source, offset) to search this catalog.",
                  "Third-party skills are optional reference material; use current tool schemas and user scope."]
         sources = {}
         for skill in self.skills.values():
@@ -118,6 +128,21 @@ class SkillCatalog:
             raise ValueError("Unknown skill; use list_skills and the exact namespaced name")
         return self.skills[name]
 
+    @staticmethod
+    def _resource_visible(skill, path, base):
+        """Shared references are allowed; another skill package is a boundary."""
+        selected = skill.path.parent.resolve()
+        if path.name.lower() == 'skill.md' and path.resolve() != skill.path.resolve():
+            return False
+        directory = path.parent
+        while directory.is_relative_to(base):
+            if (directory / 'SKILL.md').is_file() and directory.resolve() != selected:
+                return False
+            if directory == base:
+                break
+            directory = directory.parent
+        return True
+
     def resource_path(self, name, resource="SKILL.md"):
         skill = self._skill(name)
         base = skill.path.parent.resolve()
@@ -131,6 +156,8 @@ class SkillCatalog:
         path = (base / resource).resolve()
         if not path.is_relative_to(base) or not path.is_file():
             raise ValueError("Resource must be inside the selected skill or @source resource directory")
+        if not self._resource_visible(skill, path, base):
+            raise ValueError('A different skill package requires its own authorized load_skill call')
         return path
 
     def load(self, name, resource="SKILL.md"):
@@ -158,7 +185,9 @@ class SkillCatalog:
         rows = []
         for base, prefix in bases:
             for p in sorted(base.rglob("*")):
-                if p.is_file() and p.resolve().is_relative_to(base) and not any(x.startswith(".") for x in p.relative_to(base).parts):
+                if (p.is_file() and p.resolve().is_relative_to(base)
+                        and self._resource_visible(skill, p.resolve(), base)
+                        and not any(x.startswith(".") for x in p.relative_to(base).parts)):
                     rows.append({"resource": prefix+p.relative_to(base).as_posix(), "bytes": p.stat().st_size})
         offset, limit = max(0, offset), min(100, max(1, limit))
         return {"resources": rows[offset:offset+limit], "total": len(rows),
@@ -169,7 +198,7 @@ class SkillCatalog:
         base = skill.path.parent.resolve()
         if any(p.is_symlink() for p in base.rglob("*")):
             raise ValueError("Staging does not allow symbolic links")
-        paths = [p for p in base.rglob("*") if p.is_file()]
+        paths = [p for p in base.rglob("*") if p.is_file() and self._resource_visible(skill,p.resolve(),base)]
         if any(not p.resolve().is_relative_to(base) for p in paths):
             raise ValueError("Skill resources escape package")
         if len(paths) > 2000 or sum(p.stat().st_size for p in paths) > 50_000_000:
@@ -177,6 +206,10 @@ class SkillCatalog:
         if target.exists():
             raise ValueError("Staging destination already exists")
         hashes = {p.relative_to(base).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
-        shutil.copytree(base, target)
+        def ignore_other_skills(directory, names):
+            return [name for name in names if
+                    ((Path(directory)/name).is_dir() and (Path(directory)/name/'SKILL.md').is_file())
+                    or ((Path(directory)/name).is_file() and not self._resource_visible(skill,Path(directory)/name,base))]
+        shutil.copytree(base, target, ignore=ignore_other_skills)
         return {"name": name, "source": skill.source, "files": len(hashes), "hashes": hashes,
                 "status": "copied only; not executed or dependencies installed"}

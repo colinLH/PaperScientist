@@ -31,6 +31,7 @@ async def run_python(store, sid, path, enabled, timeout=120):
     out_dir.mkdir(exist_ok=True)
     run_id = f"run_{time.time_ns()}"
     stdout_path, stderr_path = out_dir / f"{run_id}.stdout.txt", out_dir / f"{run_id}.stderr.txt"
+    test_evidence = out_dir / f"{run_id}.tests.json"
     started = time.monotonic()
     def result_snapshot():
         root = store.workspace(sid)
@@ -43,8 +44,9 @@ async def run_python(store, sid, path, enabled, timeout=120):
     before = result_snapshot()
     timed_out = False
     with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
-        runner = "import runpy,sys;sys.path[:0]=[sys.argv[2],sys.argv[3]];runpy.run_path(sys.argv[1],run_name='__main__')"
-        proc = await asyncio.create_subprocess_exec(sys.executable, "-I", "-c", runner, str(script), str(script.parent), str(store.workspace(sid)),
+        observer_path = str(Path(__file__).with_name('test_execution.py').resolve())
+        runner = f"import runpy,sys;worker=runpy.run_path({observer_path!r});worker['execute'](*sys.argv[1:])"
+        proc = await asyncio.create_subprocess_exec(sys.executable, "-I", "-c", runner, str(script), str(store.workspace(sid)), str(test_evidence),
             cwd=store.workspace(sid), env=env, stdout=stdout, stderr=stderr)
         job = None
         try:
@@ -65,6 +67,9 @@ async def run_python(store, sid, path, enabled, timeout=120):
               "exit_code": proc.returncode, "timed_out": timed_out, "duration_seconds": round(time.monotonic() - started, 3),
               "stdout": stdout_path.read_text(encoding="utf-8", errors="replace")[-12000:],
               "stderr": stderr_path.read_text(encoding="utf-8", errors="replace")[-12000:]}
+    record['input_source_hashes'] = {name:digest for name,(_,digest) in before.items() if name.endswith('.py')}
+    record['unit_tests'] = (json.loads(test_evidence.read_text(encoding='utf-8')) if test_evidence.is_file()
+                            else {'observer':'unavailable', 'tests':0, 'successful':False})
     record["output_files"] = {name: digest for name, (mtime, digest) in result_snapshot().items()
                               if before.get(name) != (mtime, digest)}
     log = out_dir / f"{run_id}.json"
@@ -250,7 +255,10 @@ def tex_escape(text):
     return "".join(replacements.get(c,c) for c in text)
 
 
-def assemble_manuscript(store, session, title, abstract, sections, paper_ids):
+def assemble_manuscript(store, session, title, abstract, sections, paper_ids,
+                        columns="single", paper="a4", margin_mm=24.0, column_gap_mm=6.0,
+                        allow_wide_figures=False, min_figure_font_pt=7.0,
+                        requirement="", layout_rules=None):
     import re
     papers = {p["id"]:p for p in store.papers(session)}
     if any(pid not in papers for pid in paper_ids):
@@ -263,7 +271,14 @@ def assemble_manuscript(store, session, title, abstract, sections, paper_ids):
         raise ValueError(f"Unverified citation keys: {sorted(cited-set(paper_ids))}")
     folder = store.workspace(session["id"]) / "manuscripts" / f"draft_{time.time_ns()}"
     (folder / "sections").mkdir(parents=True)
-    lines = [r"\documentclass[11pt]{article}", r"\usepackage[margin=1in]{geometry}",
+    if columns not in {"single", "double"} or paper not in {"a4", "letter"}:
+        raise ValueError("columns must be single/double and paper a4/letter")
+    margins = ({side: float(margin_mm) for side in ("left", "right", "top", "bottom")}
+               if isinstance(margin_mm, (int, float)) else margin_mm)
+    geometry = ",".join(f"{side}={float(margins[side])}mm" for side in ("left", "right", "top", "bottom"))
+    options = f"11pt,{paper}paper" + (",twocolumn" if columns == "double" else "")
+    lines = [r"\documentclass["+options+"]{article}", r"\usepackage["+geometry+"]{geometry}",
+             r"\setlength{\columnsep}{"+str(float(column_gap_mm))+"mm}",
              r"\usepackage{amsmath,amssymb,graphicx,booktabs,hyperref}",
              r"\title{"+tex_escape(title)+"}", r"\author{Author information pending}", r"\date{}",
              r"\begin{document}", r"\maketitle", r"\begin{abstract}", abstract, r"\end{abstract}"]
@@ -282,6 +297,10 @@ def assemble_manuscript(store, session, title, abstract, sections, paper_ids):
         entries.append("@misc{"+pid+",\n"+",\n".join(f"  {k} = {{{tex_escape(str(v))}}}" for k,v in fields.items() if v)+"\n}")
     (folder/"references.bib").write_text("\n\n".join(entries), encoding="utf-8")
     (folder/"README.txt").write_text("Research draft. Verify all claims, author details, citations and measured results before submission.\nCompile: pdflatex main; bibtex main; pdflatex main; pdflatex main.\nFor Chinese content use a ctex/XeLaTeX preamble.\n",encoding="utf-8")
+    from .manuscript_layout import configure
+    configure(store, session["id"], (folder/"main.tex").relative_to(store.workspace(session["id"])).as_posix(),
+              columns, paper, margin_mm, column_gap_mm, allow_wide_figures, min_figure_font_pt,
+              requirement, source="user" if requirement else "default", rules=layout_rules)
     return folder
 
 
@@ -289,6 +308,11 @@ async def compile_latex(store, sid, main_path):
     path = store.file(sid, main_path)
     if path.suffix != ".tex" or not path.is_file():
         raise ValueError("Expected a saved .tex file")
+    from .manuscript_layout import preflight, prepare_compile, validate_compiled
+    before = preflight(store, sid, main_path)
+    if before["status"] == "blocked":
+        return {"status": "layout_blocked", "layout": before,
+                "message": "Repair the manuscript or explicitly configure its layout contract before compilation."}
     # LaTeX is a code execution capability too: caller gates this tool.
     bundled = Path(__file__).resolve().parents[1] / ".tools" / "tectonic" / ("tectonic.exe" if os.name == "nt" else "tectonic")
     compiler = shutil.which("tectonic") or (str(bundled) if bundled.is_file() else None) or shutil.which("pdflatex")
@@ -297,10 +321,11 @@ async def compile_latex(store, sid, main_path):
     # Optional operator-selected bundle, kept outside source and manuscript inputs.
     bundle_hint = bundled.parent / "bundle.url"
     bundle = os.environ.get("PS_TECTONIC_BUNDLE") or (bundle_hint.read_text(encoding="utf-8").strip() if bundle_hint.is_file() else "")
-    commands = [[compiler,"--untrusted", "--keep-logs", *(["--bundle", bundle] if bundle else []), path.name]] if "tectonic" in Path(compiler).name else [
-        [compiler,"-no-shell-escape","-interaction=nonstopmode","-halt-on-error",path.name]]
+    wrapper = prepare_compile(path)
+    commands = [[compiler,"--untrusted", "--keep-logs", *(["--bundle", bundle] if bundle else []), wrapper.name]] if "tectonic" in Path(compiler).name else [
+        [compiler,"-no-shell-escape","-interaction=nonstopmode","-halt-on-error",wrapper.name]]
     if "pdflatex" in Path(compiler).name and (path.parent/"references.bib").exists() and shutil.which("bibtex"):
-        commands += [[shutil.which("bibtex"),path.stem],commands[0],commands[0]]
+        commands += [[shutil.which("bibtex"),wrapper.stem],commands[0],commands[0]]
     logs = []
     for command in commands:
         process = await asyncio.create_subprocess_exec(*command, cwd=path.parent, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
@@ -315,8 +340,16 @@ async def compile_latex(store, sid, main_path):
         logs.append(output.decode(errors="replace")[-10000:])
         if process.returncode:
             return {"status":"error","log":"\n".join(logs)}
+    candidate = wrapper.with_suffix(".pdf")
+    full_log = wrapper.with_suffix(".log").read_text(encoding="utf-8", errors="replace") if wrapper.with_suffix(".log").is_file() else "\n".join(logs)
+    layout = validate_compiled(store, sid, main_path, candidate, full_log, before)
+    if layout["status"] != "passed":
+        return {"status": "layout_blocked", "layout": layout, "log": "\n".join(logs),
+                "message": "Compilation succeeded but layout validation failed. The previous delivered PDF was preserved."}
     pdf = path.with_suffix(".pdf")
-    return {"status":"success", "artifact":store.artifact(sid,pdf,"manuscript_pdf"), "log":"\n".join(logs)}
+    shutil.copyfile(candidate, pdf)
+    return {"status":"success", "artifact":store.artifact(sid,pdf,"manuscript_pdf", {"layout_validated": True}),
+            "layout": layout, "log":"\n".join(logs)}
 
 
 def validate_manuscript(store, sid, main_path):

@@ -1112,6 +1112,67 @@
         "Science-Research-Writing-Skills": "752d039113733c1355fd6dc72718a79132359862cda757bc277e0df7fa4f6d38",
         "_source": "5b853928a5985cae9449bcf83c7b38de0d9ccbf1df51a216132973e3cac99226"
       }
+    },
+    {
+      "id": "writing-style",
+      "repo": "Kiterlin/anti-defensive-writing",
+      "url": "https://github.com/Kiterlin/anti-defensive-writing",
+      "commit": "f516147d017a3fe43ae99192cb89d8261b0c8679",
+      "license": "MIT",
+      "identification": "User request / reviewed upstream source, 2026-10-25",
+      "skill_paths": [
+        "skill/anti-defensive-writing"
+      ],
+      "source_paths": [
+        "LICENSE",
+        "README.md"
+      ],
+      "local_dir": "external_skills/writing-style",
+      "topics": "academic writing polishing anti-defensive prose 去AI味 润色",
+      "package_hashes": {
+        "anti-defensive-writing": "59701ce011366447bb716bb50280e79a3bc4f2b576262255d053106f70a5b9b9",
+        "_source": "34d17547ab87bb425d9f965ddcf586c53996616b154f4594c42ca195b21fe415"
+      }
+    },
+    {
+      "id": "frontend",
+      "repo": "anthropics/skills",
+      "url": "https://github.com/anthropics/skills",
+      "commit": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "license": "Apache-2.0",
+      "identification": "User request / reviewed upstream source, 2026-10-25",
+      "skill_paths": [
+        "skills/frontend-design"
+      ],
+      "source_paths": [],
+      "local_dir": "external_skills/frontend",
+      "topics": "frontend art direction typography visual design 前端 设计 美工",
+      "package_hashes": {
+        "frontend-design": "d43ace63d22e3502ab5c53b63138dafd0431ed5fd2fa63320285c8167ab27de6",
+        "_source": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "figureforge",
+      "repo": "qwdwqfwq/topconf-paper-figure-gallery",
+      "url": "https://github.com/qwdwqfwq/topconf-paper-figure-gallery",
+      "commit": "dbf360a533ee46bc7d4a8f6037717c83f21a633a",
+      "license": "MIT (code); original paper image rights retained",
+      "identification": "User request / reviewed upstream source, 2026-10-25",
+      "skill_paths": [],
+      "source_paths": [
+        "LICENSE",
+        "IMAGES_POLICY.md",
+        "README.md",
+        "forge/EDITABLE_EXPORT.md",
+        "forge/retrieval.mjs",
+        "forge/data/figures.json"
+      ],
+      "local_dir": "external_skills/figureforge",
+      "topics": "FigureForge priority gallery scientific figures workflow 绘图 框架图",
+      "package_hashes": {
+        "_source": "2cb9cbc25a82269f035f6950556ff0cb7bb5627d6e172b64069b08b3f933cd7f"
+      }
     }
   ]
 }
