@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Journey} from '../paperscientist/static/intro/motion.mjs';
-import {WORK_RANGE,railLayout,railCard,playingCards,progressForCard,wallTile,workPixelRatio} from '../paperscientist/static/intro/work-layout.mjs';
+import {WORK_RANGE,CURTAIN_START,CURTAIN_END,railLayout,railCard,playingCards,progressForCard,entryForCard,wallTile,workPixelRatio,workCamera,portalBounds,cameraTile,workSpring} from '../paperscientist/static/intro/work-layout.mjs';
 import {createPreviewPlayback} from '../paperscientist/static/intro/paper-previews.mjs';
 
-test('at most two curtains including partial edges, disjoint rails and offscreen wrapping across viewport sizes',()=>{
+test('at most two curtains including partial edges, disjoint alternating rails across viewport sizes',()=>{
  for(const [w,h] of [[390,844],[680,380],[1280,720],[2160,1440],[3840,2160]]){
   const layout=railLayout(w,h);
   for(let step=0;step<=1000;step++){
@@ -17,13 +17,45 @@ test('at most two curtains including partial edges, disjoint rails and offscreen
      const overlapX=a.x<b.x+b.width&&b.x<a.x+a.width,overlapY=a.y<b.y+b.height&&b.y<a.y+a.height;
      assert.equal(overlapX&&overlapY,false,`${w} at ${p}: ${a.index}, ${b.index}`);
     }
-    if(step){const before=railCard(a.index,p-.001,layout);if(a.x>before.x)assert.ok(before.x+before.width<0&&a.x>w,'wrap outside viewport');else assert.ok(a.x<before.x);}
+    if(step)assert.ok(a.x<railCard(a.index,p-.001,layout).x);
     assert.deepEqual(railCard(a.index,p,layout),a);
    }
    const live=playingCards(rects,w);assert.ok(live.length<=2);assert.equal(new Set(live.map(i=>i%2)).size,live.length);
   }
   for(let i=0;i<6;i++){const r=railCard(i,progressForCard(i,layout),layout);assert.ok(r.visible);if(i)assert.ok(Math.abs(r.x+r.width/2-w/2)<1e-8);}
  }
+});
+
+test('the opened wall starts empty and curtains enter from the right only at the preceding opposite-rail exit',()=>{
+ for(const [w,h] of [[390,844],[1280,720],[3840,2160]]){
+  const layout=railLayout(w,h);
+  for(let p=0;p<CURTAIN_START;p+=.01)for(let i=0;i<6;i++)assert.equal(railCard(i,p,layout).visible,false);
+  for(let i=0;i<6;i++){
+   const entry=entryForCard(i,layout),incoming=railCard(i,entry+1e-7,layout);
+   assert.ok(incoming.visible&&incoming.x>w-1,'enters at right edge');
+   if(i){const outgoing=railCard(i-1,entry,layout);assert.notEqual(incoming.row,outgoing.row);assert.ok(outgoing.visible&&outgoing.x<0&&outgoing.x+outgoing.width<outgoing.width*.31);}
+  }
+  for(const p of [CURTAIN_END+.001,1])for(let i=0;i<6;i++)assert.equal(railCard(i,p,layout).visible,false);
+ }
+});
+
+test('camera pushes in before unfolding and folds before pulling back over the same reversible path',()=>{
+ const closed=workCamera(5),focus=workCamera(5.35),unroll=workCamera(5.65),open=workCamera(6);
+ assert.equal(closed.zoom,1);assert.equal(closed.unfold,0);
+ assert.ok(focus.zoom>1.5);assert.equal(focus.unfold,0);
+ assert.ok(unroll.unfold>0&&unroll.unfold<1);assert.equal(unroll.zoom,open.zoom);
+ assert.equal(open.unfold,1);
+ for(let i=0;i<=100;i++){
+  const a=workCamera(5+i/100),b=workCamera(9-i/100);
+  for(const key of Object.keys(a))assert.ok(Math.abs(a[key]-b[key])<1e-8);
+  for(const [w,h] of [[390,844],[1280,720],[3840,2160]]){
+   const box=portalBounds(w,h,a);assert.ok(Object.values(box).every(Number.isFinite));
+   assert.ok(Math.abs(box.x+box.width/2-w/2)<1e-8);assert.ok(Math.abs(box.y+box.height/2-h/2)<1e-8);
+   for(let j=0;j<25;j++){const tile=cameraTile(j,25,w,h,a,0);if(tile)assert.ok(Object.values(tile).every(Number.isFinite));}
+  }
+ }
+ const b0=portalBounds(1280,720,closed),b1=portalBounds(1280,720,focus);assert.ok(b1.height>b0.height*1.5);
+ assert.equal(workSpring(5.2,6),6);assert.equal(workSpring(8.2,9),6);assert.equal(workSpring(6.5,6.8),11);
 });
 
 test('cylindrical wall follows progress left, remains finite, and drawing resolution is bounded at 4K',()=>{

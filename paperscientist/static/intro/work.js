@@ -1,5 +1,5 @@
 import {smooth} from './motion.mjs';
-import {railLayout,railCard,progressForCard,playingCards,wallTile,workPixelRatio} from './work-layout.mjs';
+import {railLayout,railCard,progressForCard,playingCards,portalBounds,cameraTile,workPixelRatio} from './work-layout.mjs';
 import {papers,createPreviewPlayback} from './paper-previews.mjs';
 
 const outlines=[
@@ -45,11 +45,12 @@ export function createWork(root,wake,navigate=()=>{}){
     buildGrid();lastKey='';
   }
   function draw(state){
-    if(!ctx)return;const a=state.aperture,exit=smooth((state.p-9)/.8),insetX=width*.43*(1-a),insetY=height*.15*(1-a);
-    ctx.setTransform(ratio,0,0,ratio,0,0);ctx.clearRect(0,0,width,height);ctx.save();ctx.translate(0,-exit*height*.2);
-    ctx.beginPath();ctx.roundRect(insetX,insetY,width-insetX*2,height-insetY*2,Math.min(width*.07,height*.2)*(1-a));ctx.fillStyle='#080406';ctx.fill();ctx.clip();
-    if(a<1){const h=height*.48,w=width/(width<700?7.5:18.5)*.88;ctx.globalAlpha=1-a;ctx.drawImage(sprite,(width-w)/2,(height-h)/2,w,h);}
-    if(a>0){ctx.globalAlpha=a;for(let i=0;i<25;i++){const tile=wallTile(i,25,width,height,a,state.workProgress);if(tile&&tile.x+tile.width>=0&&tile.x<=width)ctx.drawImage(sprite,tile.x,tile.y,tile.width,tile.height);}}
+    if(!ctx)return;const camera=state.camera,b=portalBounds(width,height,camera);
+    ctx.setTransform(ratio,0,0,ratio,0,0);ctx.clearRect(0,0,width,height);ctx.save();
+    ctx.beginPath();ctx.roundRect(b.x-4,b.y-4,b.width+8,b.height+8,b.radius+4);ctx.strokeStyle='#13040c';ctx.lineWidth=1;ctx.stroke();
+    ctx.beginPath();ctx.roundRect(b.x,b.y,b.width,b.height,b.radius);ctx.fillStyle='#080406';ctx.fill();ctx.clip();
+    if(camera.phase===0){const tile=cameraTile(12,25,width,height,camera,0);ctx.drawImage(sprite,tile.x,tile.y,tile.width,tile.height);}
+    else for(let i=0;i<25;i++){const tile=cameraTile(i,25,width,height,camera,state.workProgress);if(tile&&tile.x+tile.width>=0&&tile.x<=width)ctx.drawImage(sprite,tile.x,tile.y,tile.width,tile.height);}
     ctx.restore();
   }
   function updatePlayback(rects=null){
@@ -68,8 +69,8 @@ export function createWork(root,wake,navigate=()=>{}){
     style(root,'opacity',String(state.work));data(root,'open',String(state.gallery));nav.inert=!state.gallery;
     // No time-driven movement: pausing the wheel preserves every card and
     // letter position. Reversing it retraces precisely the same coordinates.
-    draw(state);style(grid,'transform',`scale(${1+.35*state.aperture}) translate3d(0,${-smooth((state.p-9)/.8)*10}%,0)`);
-    style(grid,'opacity',String(.38*(1-state.aperture)));
+    draw(state);style(grid,'transform',`scale(${state.camera.zoom})`);
+    style(grid,'opacity',String(.38*(1-smooth((state.aperture-.65)/.35))));
     style(trail,'opacity',String(smooth((state.aperture-.76)/.24)));trail.inert=!state.gallery;
     const rects=cards.map(card=>{
       const r=railCard(card.index,state.workProgress,layout);style(card.element,'transform',`translate3d(${r.x.toFixed(3)}px,${r.y.toFixed(3)}px,0)`);
@@ -77,7 +78,7 @@ export function createWork(root,wake,navigate=()=>{}){
       if(r.visible&&state.gallery&&!card.posterLoaded){card.poster.src=card.posterSource;card.posterLoaded=true;}
       return r;
     });
-    const focused=playingCards(rects,width)[0];if(focused!==selected&&focused!==undefined){selected=focused;caption.textContent='滚动浏览论文项目 · 点击预览打开原站';buttons.forEach((b,i)=>b.setAttribute('aria-pressed',String(i===selected)));}
+    const focused=playingCards(rects,width)[0]??-1;if(focused!==selected){selected=focused;buttons.forEach((b,i)=>b.setAttribute('aria-pressed',String(i===selected)));}
     updatePlayback(rects);
   }
   resize();

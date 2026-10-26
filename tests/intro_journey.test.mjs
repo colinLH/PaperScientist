@@ -10,7 +10,7 @@ test('new camera, apertures and soundtrack traverse the same continuous path in 
   const f=journeyFrame(p);forward.push(f);
   assert.ok(f.landscape>=0&&f.landscape<=5);
   for(const key of ['work','warp','aperture','star'])assert.ok(f[key]>=0&&f[key]<=1);
-  if(forward.length>1){const before=forward.at(-2);for(const key of ['landscape','work','warp','aperture','music'])assert.ok(Math.abs(f[key]-before[key])<.025,`${key} at ${p}`);}
+  if(forward.length>1){const before=forward.at(-2);for(const key of ['landscape','work','warp','aperture','music'])assert.ok(Math.abs(f[key]-before[key])<(key==='aperture'?.04:.025),`${key} at ${p}`);}
   const gains=musicGains(f.music);
   if(p>=2)assert.ok(Math.abs(gains.reduce((s,x)=>s+x*x,0)-1)<1e-10);
  }

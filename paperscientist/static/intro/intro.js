@@ -4,7 +4,7 @@ import {mistEnvelope} from './atmosphere.mjs';
 import {LAST_STOP,chapterStops,journeyFrame} from './journey-map.mjs';
 import {createWarp} from './warp.js';
 import {createWork} from './work.js';
-import {WORK_RANGE} from './work-layout.mjs';
+import {WORK_RANGE,workSpring} from './work-layout.mjs';
 
 const chapters=[
   {name:'雾中的问题',label:'向未知出发',title:'每一个发现，\n始于一个好问题。',description:'穿过已知的边界，让好奇心带路。'},
@@ -40,7 +40,7 @@ function paint(now=performance.now(),dt=1/30){
   audio.update(state.music);drawn=p;
 }
 function fastWork(){return journey.value>4.6&&journey.value<9.7||journey.target>=5&&journey.target<=9;}
-function tick(now){frame=0;if(dead||document.hidden||credits.open)return;const fast=fastWork();if(fast&&now+.25<nextPaint){frame=requestAnimationFrame(tick);return;}nextPaint=fast?(nextPaint&&now-nextPaint<50?nextPaint+1000/60:now+1000/60):0;const dt=last?Math.min((now-last)/1000,.08):1/60;last=now;journey.tick(dt,fast?11:5);paint(now,dt);if(journey.moving||ambient())schedule();else{last=nextPaint=0;data(root,'renderState','idle');}}
+function tick(now){frame=0;if(dead||document.hidden||credits.open)return;const fast=fastWork();if(fast&&now+.25<nextPaint){frame=requestAnimationFrame(tick);return;}nextPaint=fast?(nextPaint&&now-nextPaint<50?nextPaint+1000/60:now+1000/60):0;const dt=last?Math.min((now-last)/1000,.08):1/60;last=now;journey.tick(dt,fast?workSpring(journey.value,journey.target):5);paint(now,dt);if(journey.moving||ambient())schedule();else{last=nextPaint=0;data(root,'renderState','idle');}}
 function ambient(){return !leaving&&(journeyFrame(journey.value).work<.999&&!reduced.matches||hands?.moving);}
 function schedule(){if(timer||frame||dead||document.hidden)return;data(root,'renderState',journey.moving?'moving':'ambient');if(fastWork()){frame=requestAnimationFrame(tick);return;}timer=setTimeout(()=>{timer=0;frame=requestAnimationFrame(tick);},1000/30);}
 function wake(){if(!dead&&!document.hidden){if(!frame&&!timer)last=0;schedule();}}
