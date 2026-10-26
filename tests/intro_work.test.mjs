@@ -1,14 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Journey} from '../paperscientist/static/intro/motion.mjs';
-import {WORK_RANGE,CURTAIN_START,CURTAIN_END,railLayout,railCard,playingCards,progressForCard,entryForCard,wallTile,workPixelRatio,workCamera,portalBounds,cameraTile,workSpring,workScrollRange,workDistance} from '../paperscientist/static/intro/work-layout.mjs';
+import {WORK_RANGE,CURTAIN_COUNT,CURTAIN_START,CURTAIN_END,railLayout,railCard,playingCards,progressForCard,entryForCard,wallTile,workPixelRatio,workCamera,portalBounds,cameraTile,workSpring,workScrollRange,workDistance} from '../paperscientist/static/intro/work-layout.mjs';
 import {createPreviewPlayback} from '../paperscientist/static/intro/paper-previews.mjs';
 
 test('at most two curtains including partial edges, disjoint alternating rails across viewport sizes',()=>{
  for(const [w,h] of [[390,844],[680,380],[1280,720],[2160,1440],[3840,2160]]){
   const layout=railLayout(w,h);
   for(let step=0;step<=1000;step++){
-   const p=step/1000,rects=Array.from({length:6},(_,i)=>railCard(i,p,layout));
+   const p=step/1000,rects=Array.from({length:CURTAIN_COUNT},(_,i)=>railCard(i,p,layout));
    assert.ok(rects.filter(r=>r.visible).length<=2,`${w} at ${p}: too many curtains`);
    for(const row of [0,1])assert.ok(rects.filter(r=>r.visible&&r.row===row).length<=1);
    for(const a of rects){
@@ -22,20 +22,20 @@ test('at most two curtains including partial edges, disjoint alternating rails a
    }
    const live=playingCards(rects,w);assert.ok(live.length<=2);assert.equal(new Set(live.map(i=>i%2)).size,live.length);
   }
-  for(let i=0;i<6;i++){const r=railCard(i,progressForCard(i,layout),layout);assert.ok(r.visible);if(i)assert.ok(Math.abs(r.x+r.width/2-w/2)<1e-8);}
+  for(let i=0;i<CURTAIN_COUNT;i++){const r=railCard(i,progressForCard(i,layout),layout);assert.ok(r.visible);if(i)assert.ok(Math.abs(r.x+r.width/2-w/2)<1e-8);}
  }
 });
 
 test('the opened wall starts empty and curtains enter from the right only at the preceding opposite-rail exit',()=>{
  for(const [w,h] of [[390,844],[1280,720],[3840,2160]]){
   const layout=railLayout(w,h);
-  for(let p=0;p<CURTAIN_START;p+=.01)for(let i=0;i<6;i++)assert.equal(railCard(i,p,layout).visible,false);
-  for(let i=0;i<6;i++){
+  for(let p=0;p<CURTAIN_START;p+=.01)for(let i=0;i<CURTAIN_COUNT;i++)assert.equal(railCard(i,p,layout).visible,false);
+  for(let i=0;i<CURTAIN_COUNT;i++){
    const entry=entryForCard(i,layout),incoming=railCard(i,entry+1e-7,layout);
    assert.ok(incoming.visible&&incoming.x>w-1,'enters at right edge');
-   if(i){const outgoing=railCard(i-1,entry,layout);assert.notEqual(incoming.row,outgoing.row);assert.ok(outgoing.visible&&outgoing.x<0&&outgoing.x+outgoing.width<outgoing.width*.31);}
+   if(i){const outgoing=railCard(i-1,entry,layout);assert.notEqual(incoming.row,outgoing.row);assert.ok(outgoing.visible);assert.ok(Math.abs(outgoing.x+outgoing.width-w/3)<1e-6);}
   }
-  for(const p of [CURTAIN_END+.001,1])for(let i=0;i<6;i++)assert.equal(railCard(i,p,layout).visible,false);
+  for(const p of [CURTAIN_END+.001,1])for(let i=0;i<CURTAIN_COUNT;i++)assert.equal(railCard(i,p,layout).visible,false);
  }
 });
 
@@ -109,7 +109,7 @@ test('Work spring reaches the destination sooner without discontinuous mid-fligh
  const p=fast.value,v=fast.velocity;fast.go(5);assert.equal(fast.value,p);assert.equal(fast.velocity,v);fast.tick(1/60,11);assert.ok(Math.abs(fast.value-p)<.03);
 });
 
-function mediaItems(){return Array.from({length:6},(_,index)=>{
+function mediaItems(){return Array.from({length:CURTAIN_COUNT},(_,index)=>{
  const pending=[];return {index,source:'https://example.org/'+index+'.mp4',element:{dataset:{}},pending,video:{paused:true,src:'',play(){this.paused=false;return new Promise((resolve,reject)=>pending.push({resolve,reject}));},pause(){this.paused=true;},load(){},removeAttribute(){this.src='';}}};
 });}
 const flush=async()=>{await Promise.resolve();await Promise.resolve();};

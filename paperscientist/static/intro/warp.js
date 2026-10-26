@@ -1,7 +1,7 @@
 import {clamp} from './motion.mjs';
 import {warpDepth} from './journey-map.mjs';
 
-// Adapted from the user's 095-starfield-warp reference: 400 projected stars,
+// Adapted from the user's 095-starfield-warp reference: 1200 projected stars,
 // colored rounded trails, a mouse-steered vanishing point and five speeds.
 // One shared journey clock replaces its permanent requestAnimationFrame loop.
 export function createWarp(canvas) {
@@ -9,7 +9,7 @@ export function createWarp(canvas) {
   const colors = ['#ffffff','#ffffff','#dbe9ff','#a5f3fc','#f0abfc','#bfdbfe'];
   let seed = 95, w = 1, h = 1, ratio = 1, aim = 0, steer = 0, travel = 0, lastPosition = 3, level = 3, active = false, flow = 0, direction = 1;
   const random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
-  const stars = Array.from({length:400}, () => ({x:(random()*2-1)*1.15,y:(random()*2-1)*1.15,z:random(),color:colors[Math.floor(random()*colors.length)]}));
+  const stars = Array.from({length:1200}, () => ({x:(random()*2-1)*1.15,y:(random()*2-1)*1.15,z:random(),color:colors[Math.floor(random()*colors.length)]}));
   function resize() {
     w = Math.max(1,innerWidth); h = Math.max(1,innerHeight);
     ratio = Math.min(devicePixelRatio || 1, 1.5, Math.sqrt(2600000 / (w*h)));

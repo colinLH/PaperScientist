@@ -7,13 +7,13 @@ import {createWork} from './work.js';
 import {workSpring} from './work-layout.mjs';
 
 const chapters=[
-  {name:'灵感之光',label:'向未知出发',title:'让好问题，\n成为新发现。',description:'与 PaperScientist 一起，连接文献、实验与表达。'},
-  {name:'知识星球',label:'阅读，连接，追问',title:'连接知识，\n找到研究方向。',description:'让分散的文献成为线索，让线索汇成自己的判断。'},
-  {name:'轨道实验室',label:'让想法接受检验',title:'把想法，\n交给实验验证。',description:'设计方法，构建实验，让证据回答问题。'},
+  {name:'问题与线索',label:'从一个问题出发',title:'一个问题，\n点亮一条线索。',description:'从你的好奇心出发，让分散的信息成为可追寻的线索。'},
+  {name:'知识星球',label:'阅读，连接，追问',title:'让线索相连，\n看见新的方向。',description:'沿着刚才的线索连接文献，在知识之间找到值得追问的空白。'},
+  {name:'轨道实验室',label:'让想法接受检验',title:'让方向成形，\n用实验去验证。',description:'把新的方向转化为假设、方法与实验，让证据回答最初的问题。'},
   {name:'星际穿梭',label:'穿过已知的边界',title:'向更远的\n问题出发。',description:'让好奇心，带你穿过这片星海。'},
   {name:'未知的星图',label:'在探索中保持方向',title:'让每一步探索，\n都有迹可循。',description:'你的判断、实验与发现，连成一张研究星图。'},
   {name:'研究作品',label:'从探索到表达',title:'让发现，\n成为作品。',description:'文献、方法、实验与表达，在这里相遇。'},
-  {name:'新的地平线',label:'PaperScientist',title:'接下来，\n是你的发现。',description:'带上一个问题，与科研伙伴一起出发。'}
+  {name:'研究港湾',label:'下一段旅程，属于你',title:'带上你的问题，\n从这里启航。',description:'让文献、实验与表达在这里汇合，与 PaperScientist 开始你的研究。'}
 ];
 const root=document.querySelector('#journey'),host=document.querySelector('#landscape'),copy=document.querySelector('#copy'),nav=document.querySelector('#chapters'),veil=document.querySelector('#valley-mist');
 const previous=document.querySelector('#previous'),next=document.querySelector('#next'),start=document.querySelector('#start'),credits=document.querySelector('#credits');
@@ -34,7 +34,7 @@ function paint(now=performance.now(),dt=1/30){
   data(root,'scene',String([0,1,2,'warp',3,'work',5][state.chapter]));data(root,'immersive',String(state.warp>.5||state.work>.5));data(root,'work',String(state.work>.5));data(root,'warp',String(state.warp>.5));
   data(root,'position',p.toFixed(5));data(root,'moving',String(journey.moving));
   if(veil)veil.hidden=true;
-  const opening=preludeOpacity(p);style(host,'visibility',p<3.3?'hidden':'visible');data(root,'prelude',String(p<2.5));prelude.render(p,now/1000,reduced.matches);
+  const opening=preludeOpacity(p);style(host,'visibility',p<3.3?'hidden':'visible');data(root,'prelude',String(p<2.5));data(root,'finale',String(p>9.6));prelude.render(p,now/1000,reduced.matches);
   if(scene){if(scene.setDetail(!journey.moving&&Math.abs(p-4)<.025))hands?.resize();if(p>=3.3&&Math.max(opening,state.warp,state.work)<.999&&(now-lastLandscapePaint>=32||!journey.moving)){scene.render(state.landscape,reduced.matches?0:now/1000);lastLandscapePaint=now;}}else style(host,'background',`radial-gradient(ellipse at 65% 40%,${['#789698','#80979b','#41576d','#162d48','#a19e9b','#e0c391'][Math.round(state.landscape)]},#142b3d 75%)`);
   hands?.setActive(Math.abs(p-4)<.45&&!credits.open&&!document.hidden&&!leaving);
   hands?.render(now/1000,state.star);
@@ -73,5 +73,5 @@ document.querySelectorAll('a[href="/?workspace=1"]').forEach(a=>a.addEventListen
 function dispose(){if(dead)return;dead=true;cancel();clearTimeout(resizeTimer);hands?.dispose();hands=null;prelude.dispose();warp.dispose();work.dispose();scene?.dispose();scene=null;audio.dispose();root.dataset.renderState='disposed';}
 window.addEventListener('pagehide',dispose);window.addEventListener('pageshow',e=>{if(e.persisted)location.reload();});
 controls();paint();audio.visibility(document.hidden);audio.arm();
-try{const {createScene}=await import('./scene.js?v=8');if(!dead){scene=createScene(host);paint();wake();}}catch(error){console.warn('Intro: using lightweight landscape',error.message);fallback();}
+try{const {createScene}=await import('./scene.js?v=9');if(!dead){scene=createScene(host);paint();wake();}}catch(error){console.warn('Intro: using lightweight landscape',error.message);fallback();}
 if(scene&&!dead){try{const {createHands}=await import('./hands.js?v=4');if(!dead){hands=createHands({renderer:scene.renderer,panel:document.querySelector('#hand-camera'),button:document.querySelector('#hand-toggle'),wake});paint();wake();}}catch(error){console.warn('Hand controls unavailable',error.message);document.querySelector('#hand-toggle').textContent='手势暂不可用';}}

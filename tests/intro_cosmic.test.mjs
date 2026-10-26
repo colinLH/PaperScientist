@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createPrelude,globeSeeds,globePoint,preludeOpacity,artRatio} from '../paperscientist/static/intro/cosmic-art.mjs';
+import {createPrelude,globeSeeds,globePoint,preludeOpacity,artRatio,narrativePoint,narrativePath} from '../paperscientist/static/intro/cosmic-art.mjs';
 import {createConstellation} from '../paperscientist/static/intro/constellation.js';
 
 test('opening artwork has a fixed sphere budget and finite projections at every viewport',()=>{
@@ -14,9 +14,9 @@ test('opening artwork has a fixed sphere budget and finite projections at every 
 test('new opening stops hidden drawing, reduces motion deterministically, and releases its canvas',()=>{
  Object.assign(globalThis,{innerWidth:1280,innerHeight:720,devicePixelRatio:1});
  let calls=[];const ctx={globalAlpha:1,save(){},restore(){},createLinearGradient(){return {addColorStop(){}};},createRadialGradient(){return {addColorStop(){}};}};
- for(const key of ['setTransform','fillRect','beginPath','moveTo','lineTo','closePath','fill','stroke','arc','ellipse','translate','rotate','clip'])ctx[key]=(...args)=>{assert.ok(args.every(Number.isFinite));calls.push([key,...args]);};
+ for(const key of ['clearRect','strokeRect','bezierCurveTo','setTransform','fillRect','beginPath','moveTo','lineTo','closePath','fill','stroke','arc','ellipse','translate','rotate','clip'])ctx[key]=(...args)=>{assert.ok(args.every(Number.isFinite));calls.push([key,...args]);};
  const canvas={getContext:()=>ctx,style:{},dataset:{}};const art=createPrelude(canvas);
- for(const p of [0,.5,1,1.5,2]){calls=[];art.render(p,0,true);assert.ok(calls.length>100);const first=JSON.stringify(calls);calls=[];art.render(p,30,true);assert.equal(JSON.stringify(calls),first);}
+ for(const p of [0,.5,1,1.5,2,9.5,10]){calls=[];art.render(p,0,true);assert.ok(calls.length>100);const first=JSON.stringify(calls);calls=[];art.render(p,30,true);assert.equal(JSON.stringify(calls),first);}
  calls=[];art.render(4,30);assert.equal(calls.length,0);assert.equal(canvas.hidden,true);
  art.dispose();assert.equal(canvas.width*canvas.height,1);
 });
@@ -27,4 +27,26 @@ test('star-map signals move along edges without reallocating geometry and stay s
  assert.ok(signals);const array=signals.array;atlas.render(1,0);const before=Array.from(array);
  atlas.render(1,2);assert.equal(signals.array,array);assert.notDeepEqual(Array.from(array),before);assert.ok([...array].every(Number.isFinite));
  const still=Array.from(array);atlas.render(1,2);assert.deepEqual(Array.from(array),still);atlas.dispose();
+});
+
+test('the same seeds morph continuously through both chapter boundaries and reverse exactly',()=>{
+ const seeds=globeSeeds();
+ for(const i of [0,99,220,999,2300])for(const boundary of [0,1,2]){
+  const a=narrativePoint(seeds[i],i,seeds.length,boundary-1e-5,12),b=narrativePoint(seeds[i],i,seeds.length,boundary+1e-5,12);
+  assert.ok(Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z)<1e-6);
+ }
+ for(let p=0;p<=2;p+=.02){
+  const before=narrativePoint(seeds[712],712,seeds.length,p,42);
+  const reversed=narrativePoint(seeds[712],712,seeds.length,p+.1-.1,42);
+  assert.ok(Math.hypot(before.x-reversed.x,before.y-reversed.y,before.z-reversed.z)<1e-12);
+  for(let band=0;band<6;band++)assert.ok(Object.values(narrativePath(.37,band,p,42)).every(Number.isFinite));
+ }
+});
+
+test('sparse atlas spans all four quadrants without recreating the old dense network',()=>{
+ const atlas=createConstellation();assert.equal(atlas.group.userData.nodes,18);assert.equal(atlas.group.userData.edges,11);
+ let coords;atlas.group.traverse(n=>{if(n.isPoints&&n.geometry.attributes.position.count===18)coords=n.geometry.attributes.position;});
+ assert.ok(coords);const x=[],y=[];for(let i=0;i<coords.count;i++){x.push(coords.getX(i));y.push(coords.getY(i));}
+ assert.ok(Math.min(...x)<-.85&&Math.max(...x)>.85&&Math.min(...y)<-.7&&Math.max(...y)>.8);
+ for(const sx of [-1,1])for(const sy of [-1,1])assert.ok(x.some((v,i)=>v*sx>.3&&y[i]*sy>.3));atlas.dispose();
 });

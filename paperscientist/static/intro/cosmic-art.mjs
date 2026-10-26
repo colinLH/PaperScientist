@@ -1,4 +1,5 @@
 import {clamp,smooth} from './motion.mjs';
+import {drawHorizon} from './horizon.mjs';
 
 // Procedural artwork inspired by the user's local 099, 138 and 195 demos.
 // A shared clock, deterministic samples and bounded canvases replace their RAFs.
@@ -15,30 +16,6 @@ export function starDust(ctx,w,h,time,stars,alpha=1){
   ctx.globalAlpha=1;
 }
 
-// Satin light curtains: continuous paths, broad translucent bodies, fine crests.
-// No shadowBlur/filter or accumulated frames; reversing/resize cannot leave ghosts.
-export function aurora(ctx,w,h,time,{portal=0,pointer={x:0,y:0},center=.51}={}){
-  ctx.save();ctx.globalCompositeOperation='lighter';
-  for(let band=0;band<5;band++){
-    const color=band<2?'72,221,199':band<4?'78,145,235':'188,211,247';
-    const base=h*(center+band*.034),amp=h*(.12+band*.009),phase=time*(.11+band*.008)+band*.72;
-    const y=(u,layer)=>base+Math.sin(u*4.8+phase)*amp+Math.sin(u*9.1-phase*.7)*amp*.24
-      +Math.cos(u*2.6+phase*.2)*h*.05+layer*h*.006+pointer.y*h*.022
-      +(Math.pow(Math.abs(u-.5)*2,1.8)-.4)*portal*h*.33;
-    const glow=ctx.createLinearGradient(0,base-amp-h*.22,0,base+amp);
-    glow.addColorStop(0,`rgba(${color},0)`);glow.addColorStop(.25,`rgba(${color},.04)`);
-    glow.addColorStop(.68,`rgba(${color},.32)`);glow.addColorStop(.88,`rgba(${color},.22)`);glow.addColorStop(1,`rgba(${color},0)`);
-    ctx.beginPath();for(let k=0;k<=100;k++){const u=k/100;k?ctx.lineTo(u*w,y(u,0)):ctx.moveTo(0,y(0,0));}
-    for(let k=100;k>=0;k--){const u=k/100;ctx.lineTo(u*w,y(u,0)-h*(.17+.035*Math.sin(u*5+phase)));}
-    ctx.closePath();ctx.fillStyle=glow;ctx.fill();
-    for(let layer=0;layer<9;layer++){
-      ctx.beginPath();for(let k=0;k<=100;k++){const u=k/100;k?ctx.lineTo(u*w,y(u,layer)):ctx.moveTo(0,y(0,layer));}
-      ctx.strokeStyle=`rgba(${color},${layer===0?.42:.025+(8-layer)*.005})`;ctx.lineWidth=layer===0?1.2:.65;ctx.stroke();
-    }
-  }
-  ctx.restore();
-}
-
 // Approximate invented land silhouettes: decorative connectivity globe, not GIS.
 const continents=[[-105,40,43,28],[-70,-13,20,46],[18,4,24,38],[65,42,70,24],[133,-25,24,15],[-42,72,17,16]];
 export function globeSeeds(count=2400){
@@ -53,70 +30,69 @@ export function globePoint(p,time,tilt=.18){
   const a=time*.075+.4,c=Math.cos(a),s=Math.sin(a),x=p.x*c+p.z*s,z=-p.x*s+p.z*c;
   return {x,y:p.y*Math.cos(tilt)-z*Math.sin(tilt),z:p.y*Math.sin(tilt)+z*Math.cos(tilt)};
 }
-export function globe(ctx,w,h,time,seeds,pointer){
-  const fade=ctx.globalAlpha;
-  const narrow=w<900,r=Math.min(w*(narrow?.42:.30),h*(narrow?.26:.37)),cx=w*(narrow?.5:.70)+pointer.x*12,cy=h*(narrow?.68:.52)+pointer.y*8;
-  const aura=ctx.createRadialGradient(cx,cy,r*.2,cx,cy,r*1.4);aura.addColorStop(0,'#0b2438');aura.addColorStop(.68,'#071927');aura.addColorStop(1,'rgba(5,12,22,0)');ctx.fillStyle=aura;ctx.fillRect(cx-r*1.4,cy-r*1.4,r*2.8,r*2.8);
-  ctx.strokeStyle='rgba(164,221,242,.28)';ctx.lineWidth=1;ctx.beginPath();ctx.arc(cx,cy,r,0,TAU);ctx.stroke();
-  for(const p of seeds){const q=globePoint(p,time,.18+pointer.y*.12);const alpha=q.z>0?.24+q.z*.65:.07;
-    ctx.globalAlpha=fade*alpha*(p.land?1:.24);ctx.fillStyle=p.land?'#b7e5eb':'#6795b6';const size=(p.land?1.8:1)*(.7+.6*Math.max(0,q.z));ctx.fillRect(cx+q.x*r-size/2,cy-q.y*r-size/2,size,size);}
-  ctx.globalAlpha=fade;
-  // Elevated arcs trace evidence travelling between distant points.
-  for(let line=0;line<6;line++){
-    const from=seeds[(line*317+83)%seeds.length],to=seeds[(line*193+1134)%seeds.length],phase=(time*.12+line*.163)%1;
-    const at=u=>{const x=from.x*(1-u)+to.x*u,y=from.y*(1-u)+to.y*u,z=from.z*(1-u)+to.z*u;const n=Math.hypot(x,y,z),lift=1+Math.sin(u*Math.PI)*.35;return globePoint({x:x/n*lift,y:y/n*lift,z:z/n*lift},time,.18+pointer.y*.12);};
-    ctx.beginPath();for(let k=0;k<=60;k++){const q=at(k/60);k?ctx.lineTo(cx+q.x*r,cy-q.y*r):ctx.moveTo(cx+q.x*r,cy-q.y*r);}
-    ctx.strokeStyle='rgba(215,194,139,.4)';ctx.lineWidth=1;ctx.stroke();const dot=at(phase);
-    ctx.fillStyle='#fff0c4';ctx.beginPath();ctx.arc(cx+dot.x*r,cy-dot.y*r,2.8,0,TAU);ctx.fill();
-  }
-}
 
-export function orbital(ctx,w,h,time,pointer){
-  const narrow=w<900,cx=w*(narrow?.5:.71)+pointer.x*10,cy=h*(narrow?.66:.53),unit=Math.min(w*(narrow?.46:.35),h*(narrow?.26:.41));
-  ctx.save();ctx.translate(cx,cy);ctx.rotate(-.27+pointer.y*.05);
-  // Tilted fabric depression echoes the user's gravity-well image.
-  for(let j=-7;j<=7;j++){
-    ctx.beginPath();for(let k=0;k<=100;k++){const x=(k/50-1)*unit*1.45,z=j/7,well=Math.exp(-((x/unit)**2+z*z)*3)*unit*.23;
-      const y=z*unit*.64+well;k?ctx.lineTo(x,y):ctx.moveTo(x,y);}
-    ctx.strokeStyle='rgba(130,173,198,.11)';ctx.lineWidth=.65;ctx.stroke();
-  }
-  for(let j=-10;j<=10;j++){
-    ctx.beginPath();for(let k=0;k<=60;k++){const z=k/30-1,x=j/10*unit*1.45,well=Math.exp(-((x/unit)**2+z*z)*3)*unit*.23;const y=z*unit*.64+well;k?ctx.lineTo(x,y):ctx.moveTo(x,y);}
-    ctx.stroke();
-  }
-  for(let i=0;i<5;i++){
-    const r=unit*(.36+i*.20),angle=time*(.18-i*.022)+i*1.3;
-    ctx.beginPath();ctx.ellipse(0,0,r,r*.58,0,0,TAU);ctx.strokeStyle=`rgba(188,210,224,${.28-i*.025})`;ctx.lineWidth=1;ctx.stroke();
-    for(let tail=0;tail<12;tail++){ctx.beginPath();ctx.ellipse(0,0,r,r*.58,0,angle-.32+tail*.026,angle-.294+tail*.026);ctx.strokeStyle=`rgba(144,205,239,${.08+tail*.025})`;ctx.lineWidth=2;ctx.stroke();}
-    const x=Math.cos(angle)*r,y=Math.sin(angle)*r*.58,rad=unit*(i===3?.035:.018+i*.002);
-    const shade=ctx.createRadialGradient(x-rad*.3,y-rad*.4,0,x,y,rad);shade.addColorStop(0,i===3?'#ffedd0':'#def6ff');shade.addColorStop(.45,i===3?'#b78f68':'#80b3cb');shade.addColorStop(1,'#172a3b');
-    ctx.fillStyle=shade;ctx.beginPath();ctx.arc(x,y,rad,0,TAU);ctx.fill();
-    if(i===3){ctx.beginPath();ctx.ellipse(x,y,rad*1.9,rad*.65,-.4,0,TAU);ctx.strokeStyle='#cdb89a88';ctx.lineWidth=2;ctx.stroke();}
-  }
-  const sr=unit*.15;const corona=ctx.createRadialGradient(0,0,sr*.5,0,0,sr*3.7);corona.addColorStop(0,'rgba(255,219,153,.7)');corona.addColorStop(.42,'rgba(237,158,61,.14)');corona.addColorStop(1,'rgba(235,153,62,0)');ctx.fillStyle=corona;ctx.fillRect(-sr*4,-sr*4,sr*8,sr*8);
-  const core=ctx.createRadialGradient(-sr*.3,-sr*.3,0,0,0,sr);core.addColorStop(0,'#fff7ce');core.addColorStop(.65,'#f4ce78');core.addColorStop(1,'#ba7738');ctx.fillStyle=core;ctx.beginPath();ctx.arc(0,0,sr,0,TAU);ctx.fill();
-  ctx.save();ctx.beginPath();ctx.arc(0,0,sr,0,TAU);ctx.clip();ctx.strokeStyle='rgba(255,255,226,.18)';ctx.lineWidth=1;
-  for(let i=0;i<12;i++){ctx.beginPath();for(let k=0;k<=40;k++){const x=(k/20-1)*sr,y=-sr+i*sr/6+Math.sin(x/sr*5+time*.32+i)*sr*.07;k?ctx.lineTo(x,y):ctx.moveTo(x,y);}ctx.stroke();}ctx.restore();ctx.restore();
+const mix=(a,b,t)=>a+(b-a)*t;
+export function narrativePoint(seed,index,count,progress,time){
+  const p=clamp(progress,0,2),u=(index%200)/199,band=Math.floor(index/200);
+  const wave={x:(u-.5)*3.5,y:Math.sin(u*7.5+time*.16+band*.08)*.28+(band-5.5)*.018,z:Math.cos(u*6+band*.12)*.14};
+  const sphere=globePoint(seed,time);
+  const ring=index%6,r=.24+ring*.21+Math.sin(index*2.4)*.012,a=index/count*TAU+time*(.13-ring*.012);
+  const ox=Math.cos(a)*r,oy=Math.sin(a)*r*.47;
+  const orbit={x:ox*Math.cos(-.24)-oy*Math.sin(-.24),y:ox*Math.sin(-.24)+oy*Math.cos(-.24),z:Math.sin(a)*r*.2};
+  const from=p<=1?wave:sphere,to=p<=1?sphere:orbit,t=smooth(p<=1?p:p-1);
+  return {x:mix(from.x,to.x,t),y:mix(from.y,to.y,t),z:mix(from.z,to.z,t)};
 }
-
+export function narrativePath(u,band,p,time){
+  const a=u*TAU+time*.08,lat=(band-2.5)*.26,r=Math.sqrt(1-lat*lat);
+  const wave={x:(u-.5)*3.5,y:Math.sin(u*7.5+time*.16+band*.17)*.28+(band-2.5)*.04};
+  const sphere=globePoint({x:Math.cos(a)*r,y:lat,z:Math.sin(a)*r},time);
+  const radius=.24+band*.21,ox=Math.cos(a)*radius,oy=Math.sin(a)*radius*.47;
+  const orbit={x:ox*Math.cos(-.24)-oy*Math.sin(-.24),y:ox*Math.sin(-.24)+oy*Math.cos(-.24)};
+  const from=p<=1?wave:sphere,to=p<=1?sphere:orbit,t=smooth(p<=1?p:p-1);
+  return {x:mix(from.x,to.x,t),y:mix(from.y,to.y,t)};
+}
 export function createPrelude(canvas){
-  const ctx=canvas.getContext('2d',{alpha:false}),stars=seededStars(),dots=globeSeeds(),aim={x:0,y:0},lean={x:0,y:0};let w=1,h=1,ratio=1,dead=false;
+  const ctx=canvas.getContext('2d',{alpha:true}),stars=seededStars(),dots=globeSeeds(),aim={x:0,y:0},lean={x:0,y:0};let w=1,h=1,ratio=1,dead=false;
   function resize(){w=Math.max(1,innerWidth);h=Math.max(1,innerHeight);ratio=artRatio(w,h,devicePixelRatio||1);canvas.width=Math.round(w*ratio);canvas.height=Math.round(h*ratio);}
   function render(p,time,reduced=false){
-    if(dead)return;const opacity=preludeOpacity(p);canvas.hidden=opacity<.001;canvas.style.opacity=String(opacity);if(dead||!ctx||opacity<.001)return;
+    if(dead)return;const finale=p>9.12,opacity=finale?smooth((p-9.12)/.88):preludeOpacity(p);
+    canvas.hidden=opacity<.001;canvas.style.opacity=String(opacity);if(!ctx||opacity<.001)return;
     const t=reduced?0:time;lean.x+=(aim.x-lean.x)*.08;lean.y+=(aim.y-lean.y)*.08;
-    ctx.setTransform(ratio,0,0,ratio,0,0);ctx.globalAlpha=1;ctx.fillStyle='#050d18';ctx.fillRect(0,0,w,h);starDust(ctx,w,h,t,stars,.7);
-    const progress=clamp(p,0,2),a=Math.floor(progress),blend=smooth(progress-a);
-    function layer(index,opacity){if(opacity<.001)return;ctx.save();ctx.globalAlpha=opacity;
-      // Each scene is a complete poster. Fade through a dark field, not a
-      // stack of expensive fullscreen blur filters.
-      if(index===0){aurora(ctx,w,h,t,{pointer:lean,center:w<900?.56:.42});}
-      if(index===1)globe(ctx,w,h,t,dots,lean);
-      if(index===2)orbital(ctx,w,h,t,lean);ctx.restore();}
-    // Nonlinear alpha leaves a brief quiet transition while copy changes.
-    layer(a,1-blend);if(a<2)layer(a+1,blend);
-    const scrim=ctx.createLinearGradient(0,0,w*.64,0);scrim.addColorStop(0,'rgba(5,13,24,.4)');scrim.addColorStop(1,'rgba(5,13,24,0)');ctx.fillStyle=scrim;ctx.fillRect(0,0,w,h);
-    canvas.dataset.art=['aurora','globe','orbits'][Math.round(progress)];canvas.dataset.points=String(dots.length);
+    ctx.setTransform(ratio,0,0,ratio,0,0);ctx.globalAlpha=1;ctx.clearRect(0,0,w,h);
+    if(finale){drawHorizon(ctx,w,h,t,reduced?{x:0,y:0}:lean);canvas.dataset.art='research-harbor';return;}
+    ctx.fillStyle='#050d18';ctx.fillRect(0,0,w,h);starDust(ctx,w,h,t,stars,.55);
+    const phase=clamp(p,0,2),warm=smooth(phase-1),narrow=w<900,unit=Math.min(w*(narrow?.41:.36),h*(narrow?.25:.36));
+    const cx=w*(narrow?.5:.69)+lean.x*10,cy=h*(narrow?.67:.54)+lean.y*7;
+    const halo=ctx.createRadialGradient(cx,cy,0,cx,cy,unit*1.45);
+    halo.addColorStop(0,`rgba(${28+warm*82},${125+warm*19},${156-warm*8},${.2-warm*.04})`);halo.addColorStop(1,'rgba(5,13,24,0)');ctx.fillStyle=halo;ctx.fillRect(0,0,w,h);
+    const accent=`rgb(${212+warm*43},${247-warm*22},${243-warm*69})`;
+    // Each seed survives the journey. No scene crossfade, respawn or random jump.
+    for(let i=0;i<dots.length;i++){
+      const q=narrativePoint(dots[i],i,dots.length,phase,t),sphereWeight=1-Math.abs(phase-1);
+      const density=mix(.72,dots[i].land?1:.18,sphereWeight),depth=.26+.62*(q.z+1)/2;
+      ctx.globalAlpha=density*depth;ctx.fillStyle=i%9===0?accent:i%3===0?'#d4f7f3':'#72b6dc';
+      const size=(i%13===0?2:1.15)*(.8+.3*(q.z+1));ctx.fillRect(cx+q.x*unit,cy-q.y*unit,size,size);
+    }
+    ctx.globalAlpha=1;
+    for(let band=0;band<6;band++){
+      // Translucent sheets use the same morph as their edge and particle seeds.
+      // This preserves the opening's luminous body through the spherical fold.
+      if(band<5){
+        const sheet=ctx.createLinearGradient(cx-unit,cy-unit, cx+unit,cy+unit);
+        sheet.addColorStop(0,'rgba(83,190,202,.02)');sheet.addColorStop(.5,`rgba(94,184,218,${.18-.06*phase})`);sheet.addColorStop(1,'rgba(120,155,209,.015)');
+        ctx.beginPath();for(let k=0;k<=80;k++){const q=narrativePath(k/80,band,phase,t);k?ctx.lineTo(cx+q.x*unit,cy-q.y*unit):ctx.moveTo(cx+q.x*unit,cy-q.y*unit);}
+        for(let k=80;k>=0;k--){const q=narrativePath(k/80,band+1,phase,t);ctx.lineTo(cx+q.x*unit,cy-q.y*unit);}ctx.closePath();ctx.fillStyle=sheet;ctx.fill();
+      }
+      ctx.beginPath();for(let k=0;k<=100;k++){const q=narrativePath(k/100,band,phase,t);k?ctx.lineTo(cx+q.x*unit,cy-q.y*unit):ctx.moveTo(cx+q.x*unit,cy-q.y*unit);}
+      ctx.strokeStyle=`rgba(${128+warm*64},${217-warm*4},${228-warm*19},${.22+warm*.03})`;ctx.lineWidth=.8;ctx.stroke();
+      const q=narrativePath((t*.028+band*.137)%1,band,phase,t);ctx.fillStyle='#e5fbf9';ctx.beginPath();ctx.arc(cx+q.x*unit,cy-q.y*unit,2.4,0,TAU);ctx.fill();
+    }
+    // The same luminous seed becomes the laboratory's sun and warp focal point.
+    const r=unit*(.025+.09*warm),glow=ctx.createRadialGradient(cx,cy,0,cx,cy,r*4);
+    glow.addColorStop(0,`rgba(${179+warm*76},${244-warm*27},${248-warm*105},${.6+warm*.25})`);glow.addColorStop(.25,`rgba(${70+warm*174},${192-warm*17},${219-warm*140},${.18+warm*.17})`);glow.addColorStop(1,'rgba(20,70,90,0)');ctx.fillStyle=glow;ctx.fillRect(cx-r*4,cy-r*4,r*8,r*8);
+    ctx.fillStyle=`rgb(${221+warm*34},${251-warm*22},${255-warm*87})`;ctx.globalAlpha=.25+.75*warm;ctx.beginPath();ctx.arc(cx,cy,r,0,TAU);ctx.fill();ctx.globalAlpha=1;
+    const scrim=ctx.createLinearGradient(0,0,w*.53,0);scrim.addColorStop(0,'rgba(5,13,24,.6)');scrim.addColorStop(1,'rgba(5,13,24,0)');ctx.fillStyle=scrim;ctx.fillRect(0,0,w,h);
+    canvas.dataset.art=['question-stream','knowledge-sphere','experiment-orbits'][Math.round(phase)];canvas.dataset.points=String(dots.length);canvas.dataset.morph=phase.toFixed(4);
   }
   resize();return {render,resize,pointer(x,y){aim.x=clamp(x,-1,1);aim.y=clamp(y,-1,1);},dispose(){dead=true;canvas.width=canvas.height=1;canvas.hidden=true;}};
 }

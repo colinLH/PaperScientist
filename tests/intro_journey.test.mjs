@@ -33,14 +33,14 @@ test('star depth is periodic and reversible',()=>{
  for(let i=0;i<400;i++){const seed=i/400,position=warpDepth(seed,.137);assert.ok(position>=.055&&position<1);assert.ok(Math.abs(warpDepth(seed,1.137)-position)<1e-12);}
 });
 
-test('warp skips all hidden drawing, keeps 400 particles across UHD resizes, and stops moving for reduced motion',()=>{
+test('warp skips all hidden drawing, keeps 1200 particles across UHD resizes, and stops moving for reduced motion',()=>{
  Object.assign(globalThis,{innerWidth:3840,innerHeight:2160,devicePixelRatio:2});
  let strokes=0,segments=[];const ctx={setTransform(){},clearRect(){segments=[];},fillRect(){},createRadialGradient(){return {addColorStop(){}};},beginPath(){},ellipse(){},quadraticCurveTo(){assert.fail('Warp rays must remain straight');},moveTo(x,y){segments.push([x,y]);},lineTo(x,y){segments.push([x,y]);},stroke(){strokes++;}};
  const canvas={getContext:()=>ctx,style:{},dataset:{}};const warp=createWarp(canvas);
- assert.equal(canvas.dataset.particles,400);assert.ok(canvas.width*canvas.height<=2604000);
+ assert.equal(canvas.dataset.particles,1200);assert.ok(canvas.width*canvas.height<=2604000);
  warp.render(3,1,1/30);assert.ok(strokes>0);const count=strokes;
  for(let i=0;i<60;i++)warp.render(4,0,1/30);assert.equal(strokes,count);assert.equal(canvas.hidden,true);
- innerWidth=390;innerHeight=844;warp.resize();assert.equal(canvas.dataset.particles,400);
+ innerWidth=390;innerHeight=844;warp.resize();assert.equal(canvas.dataset.particles,1200);
  warp.render(3,1,1/30,true);const still=structuredClone(segments);warp.render(3,1,.08,true);assert.deepEqual(segments,still);
  warp.dispose();assert.equal(canvas.width*canvas.height,1);assert.equal(canvas.hidden,true);
 });

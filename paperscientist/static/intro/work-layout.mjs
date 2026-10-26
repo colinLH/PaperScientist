@@ -1,7 +1,8 @@
 import {clamp} from './motion.mjs';
+import {papers} from './paper-previews.mjs';
 
 export const WORK_RANGE={start:6,end:8,step:.02};
-export const CURTAIN_START=.09,CURTAIN_END=.91,CURTAIN_COUNT=6;
+export const CURTAIN_START=.04,CURTAIN_END=.96,CURTAIN_COUNT=papers.length;
 export const wrap=(n,span)=>((n%span)+span)%span;
 
 // Solve the existing --ease-in-out (.77,0,.175,1) rather than adding a second
@@ -27,9 +28,9 @@ export function railLayout(width,height){
   const top=clamp(height*.15,80,144),bottom=clamp(height*.2,132,180),gapY=clamp(height*.05,22,62);
   const cardHeight=Math.max(70,(height-top-bottom-gapY)/2);
   const cardWidth=Math.min(width*(width<700?.76:.36),cardHeight*1.82,560);
-  // The next, opposite rail enters when 70% of this card has left the screen.
+  // The opposite rail enters with one third of a viewport still to travel.
   // Two handoffs exceed a full crossing, so a rail cannot overlap itself.
-  const handoff=width+cardWidth*.7,travel=(CURTAIN_COUNT-1)*handoff+width+cardWidth;
+  const handoff=width*2/3+cardWidth,travel=(CURTAIN_COUNT-1)*handoff+width+cardWidth;
   return {width,height,top,gapY,cardWidth,cardHeight,handoff,travel};
 }
 export const columnPitch=width=>width*.71*(width<700?.24:.105);

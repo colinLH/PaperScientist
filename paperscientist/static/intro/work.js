@@ -42,7 +42,7 @@ export function createWork(root,wake,navigate=()=>{}){
   }
   function draw(state,time){
     if(!ctx)return;const camera=state.camera,b=portalBounds(width,height,camera);
-    ctx.setTransform(ratio,0,0,ratio,0,0);ctx.clearRect(0,0,width,height);drawPortalField(ctx,width,height,camera,time,field,lean);ctx.save();
+    ctx.setTransform(ratio,0,0,ratio,0,0);ctx.clearRect(0,0,width,height);drawPortalField(ctx,width,height,camera,time,field,lean,smooth((state.p-8.2)/1.5));ctx.save();
     ctx.beginPath();ctx.roundRect(b.x-4,b.y-4,b.width+8,b.height+8,b.radius+4);ctx.strokeStyle='#759bad';ctx.lineWidth=1;ctx.stroke();
     ctx.beginPath();ctx.roundRect(b.x,b.y,b.width,b.height,b.radius);ctx.fillStyle='#080406';ctx.fill();ctx.clip();
     if(camera.phase===0){const tile=cameraTile(12,25,width,height,camera,0);ctx.drawImage(sprite,tile.x,tile.y,tile.width,tile.height);}

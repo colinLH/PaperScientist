@@ -177,7 +177,7 @@ gl_FragColor=vec4(c,1.);
   let dead=false,highDetail=false;
   function setDetail(enabled){if(highDetail===enabled)return false;highDetail=enabled;resize();return true;}
   function resize(){const w=Math.max(1,host.clientWidth),h=Math.max(1,host.clientHeight);renderer.setPixelRatio(scenePixelRatio(w,h,devicePixelRatio||1,highDetail));renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();const dpr=renderer.getPixelRatio(),k=dpr*clamp(h/900,.7,1.4);starsMat.uniforms.scale.value=k;moteMat.uniforms.scale.value=k;renderer.getDrawingBufferSize(skyMat.uniforms.viewport.value);paths.forEach(path=>path.resize(w,h,dpr));
-    const fit=Math.min(1,camera.aspect/1.5);network.scale.setScalar(fit);network.position.set(0,92*(1-fit),-280*(1-fit));atlas.resize(w,h,dpr);
+    const halfHeight=Math.tan(25*Math.PI/180)*280;network.scale.set(halfHeight*camera.aspect,halfHeight,1);atlas.resize(w,h,dpr);host.dataset.atlasNodes=atlas.group.userData.nodes;host.dataset.atlasEdges=atlas.group.userData.edges;
     host.dataset.quality=highDetail?'native-up-to-4k':'balanced';host.dataset.renderSize=`${renderer.domElement.width}x${renderer.domElement.height}`;
   }
   function pointer(x,y){aim.set(clamp(x,-1,1),clamp(y,-1,1));}
@@ -192,7 +192,7 @@ gl_FragColor=vec4(c,1.);
     const night=Math.max(0,1-Math.abs(p-3));hemi.intensity=2.1-night*1.35;sun.intensity=2.2-night*1.85;
     skyMat.uniforms.sunAmount.value=smooth((p-3.7)/1.3)*1.4;skyMat.uniforms.night.value=night;skyMat.uniforms.time.value=time;
     starsMat.uniforms.opacity.value=smooth(night*1.25);starsMat.uniforms.time.value=time;
-    atlas.render(night,time);paths.forEach(path=>path.uniforms.time.value=time);
+    network.position.copy(camera.position);network.quaternion.copy(camera.quaternion);atlas.render(night,time);paths.forEach(path=>path.uniforms.time.value=time);
     groundMaterial.color.copy(white).lerp(nightTint,night*.7);
     waterMaterial.color.copy(skyMat.uniforms.bottom.value).lerp(white,.18);
     color.copy(scene.fog.color).lerp(white,.35);
