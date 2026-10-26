@@ -14,20 +14,23 @@ export function railLayout(width,height){
   const top=clamp(height*.15,80,144),bottom=clamp(height*.2,132,180),gapY=clamp(height*.05,22,62);
   const cardHeight=Math.max(70,(height-top-bottom-gapY)/2);
   const cardWidth=Math.min(width*(width<700?.76:.36),cardHeight*1.82,560);
-  const gapX=clamp(width*.075,28,160),stride=Math.max(cardWidth+gapX,(width+cardWidth+gapX)/3),cycle=stride*3;
-  return {width,height,top,gapY,cardWidth,cardHeight,gapX,stride,cycle,travel:cycle*1.4};
+  // Even a sliver counts as visible: one full viewport plus one card between
+  // successive leading edges keeps each rail to one curtain at all times.
+  const gapX=clamp(width*.075,28,160),stride=width+cardWidth+gapX,cycle=stride*3;
+  const offset=Math.max(0,Math.min(width*.14,(width-cardWidth)/2-20));
+  return {width,height,top,gapY,cardWidth,cardHeight,gapX,stride,cycle,offset,travel:stride*2+offset};
 }
 export function railCard(index,progress,layout){
-  const {width,top,gapY,cardWidth,cardHeight,gapX,stride,cycle,travel}=layout;
+  const {width,top,gapY,cardWidth,cardHeight,gapX,stride,cycle,travel,offset}=layout;
   const row=index%2,column=Math.floor(index/2),leftBoundary=-cardWidth-gapX/2;
-  const base=width*.08+column*stride+row*stride*.42;
+  const base=(width-cardWidth)/2+column*stride+(row?offset:-offset);
   const x=wrap(base-clamp(progress,0,1)*travel-leftBoundary,cycle)+leftBoundary;
   const y=top+row*(cardHeight+gapY);
   return {index,row,x,y,width:cardWidth,height:cardHeight,visible:x+cardWidth>0&&x<width};
 }
 export function progressForCard(index,layout){
-  const base=layout.width*.08+Math.floor(index/2)*layout.stride+(index%2)*layout.stride*.42;
-  return wrap(base-(layout.width-layout.cardWidth)/2,layout.cycle)/layout.travel;
+  const distance=Math.floor(index/2)*layout.stride+(index%2?layout.offset:-layout.offset);
+  return clamp(distance/layout.travel,0,1);
 }
 export function playingCards(rects,width,current=[]){
   return [0,1].flatMap(row=>{

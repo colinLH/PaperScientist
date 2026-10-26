@@ -4,11 +4,13 @@ import {Journey} from '../paperscientist/static/intro/motion.mjs';
 import {WORK_RANGE,railLayout,railCard,playingCards,progressForCard,wallTile,workPixelRatio} from '../paperscientist/static/intro/work-layout.mjs';
 import {createPreviewPlayback} from '../paperscientist/static/intro/paper-previews.mjs';
 
-test('both rails keep every visible card disjoint, wrap offscreen and retrace scroll across viewport sizes',()=>{
+test('at most two curtains including partial edges, disjoint rails and offscreen wrapping across viewport sizes',()=>{
  for(const [w,h] of [[390,844],[680,380],[1280,720],[2160,1440],[3840,2160]]){
   const layout=railLayout(w,h);
   for(let step=0;step<=1000;step++){
    const p=step/1000,rects=Array.from({length:6},(_,i)=>railCard(i,p,layout));
+   assert.ok(rects.filter(r=>r.visible).length<=2,`${w} at ${p}: too many curtains`);
+   for(const row of [0,1])assert.ok(rects.filter(r=>r.visible&&r.row===row).length<=1);
    for(const a of rects){
     assert.ok(a.y>=0&&a.y+a.height<=h);
     for(const b of rects.filter(b=>b.index>a.index)){
@@ -20,7 +22,7 @@ test('both rails keep every visible card disjoint, wrap offscreen and retrace sc
    }
    const live=playingCards(rects,w);assert.ok(live.length<=2);assert.equal(new Set(live.map(i=>i%2)).size,live.length);
   }
-  for(let i=0;i<6;i++){const r=railCard(i,progressForCard(i,layout),layout);assert.ok(Math.abs(r.x+r.width/2-w/2)<1e-8);}
+  for(let i=0;i<6;i++){const r=railCard(i,progressForCard(i,layout),layout);assert.ok(r.visible);if(i)assert.ok(Math.abs(r.x+r.width/2-w/2)<1e-8);}
  }
 });
 
@@ -35,11 +37,21 @@ test('cylindrical wall follows progress left, remains finite, and drawing resolu
 test('wheel magnitude scrubs Work continuously; entrance and exit inertia cannot skip the gallery',()=>{
  const j=new Journey(10);j.go(5,true);j.wheel(100,1000,WORK_RANGE);
  for(let t=1010;t<1200;t+=10)j.wheel(30,t,WORK_RANGE);assert.equal(j.target,6);
- j.wheel(90,1500,WORK_RANGE);assert.equal(j.target,6.1);j.wheel(45,1510,WORK_RANGE);assert.ok(Math.abs(j.target-6.15)<1e-9);
- j.tick(1/60,11);const pos=j.value,velocity=j.velocity;j.wheel(-45,1520,WORK_RANGE);
+ assert.equal(j.wheel(90,1500,WORK_RANGE),false);for(let i=0;i<60;i++)j.tick(1/60,11);
+ j.wheel(90,2500,WORK_RANGE);assert.equal(j.target,6.1);j.wheel(45,2510,WORK_RANGE);assert.ok(Math.abs(j.target-6.15)<1e-9);
+ j.tick(1/60,11);const pos=j.value,velocity=j.velocity;j.wheel(-45,2520,WORK_RANGE);
  assert.equal(j.value,pos);assert.equal(j.velocity,velocity);assert.ok(Math.abs(j.target-6.1)<1e-9);
- j.wheel(9000,2000,WORK_RANGE);assert.equal(j.target,8);j.wheel(100,2010,WORK_RANGE);assert.equal(j.target,8);
- j.wheel(100,2300,WORK_RANGE);assert.equal(j.target,9);
+ j.wheel(9000,3000,WORK_RANGE);assert.equal(j.target,8);j.wheel(100,3010,WORK_RANGE);assert.equal(j.target,8);
+ assert.equal(j.wheel(100,3300,WORK_RANGE),false);for(let i=0;i<90;i++)j.tick(1/60,11);
+ j.wheel(100,5000,WORK_RANGE);assert.equal(j.target,9);
+});
+
+test('Work keeps fine-grained scroll and reversals unrestricted inside its boundaries',()=>{
+ const j=new Journey(10);j.go(6.5,true);
+ for(let i=0;i<30;i++){assert.equal(j.wheel(3,i*16,WORK_RANGE),true);j.tick(1/60,11);}
+ assert.ok(Math.abs(j.target-6.6)<1e-10);
+ for(let i=30;i<60;i++){assert.equal(j.wheel(-3,i*16,WORK_RANGE),true);j.tick(1/60,11);}
+ assert.ok(Math.abs(j.target-6.5)<1e-10);
 });
 
 test('Work spring reaches the destination sooner without discontinuous mid-flight reversal',()=>{

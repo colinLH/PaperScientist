@@ -45,7 +45,7 @@ function ambient(){return !leaving&&(journeyFrame(journey.value).work<.999&&!red
 function schedule(){if(timer||frame||dead||document.hidden)return;data(root,'renderState',journey.moving?'moving':'ambient');if(fastWork()){frame=requestAnimationFrame(tick);return;}timer=setTimeout(()=>{timer=0;frame=requestAnimationFrame(tick);},1000/30);}
 function wake(){if(!dead&&!document.hidden){if(!frame&&!timer)last=0;schedule();}}
 function cancel(){clearTimeout(timer);cancelAnimationFrame(frame);timer=frame=0;last=nextPaint=0;}
-function scrollJourney(delta){if(journey.wheel(delta,performance.now(),WORK_RANGE)){audio.arm();if(reduced.matches){journey.value=journey.target;journey.velocity=0;}controls();wake();}}
+function scrollJourney(delta){if(journey.wheel(delta,performance.now(),WORK_RANGE)){audio.arm();if(reduced.matches)journey.snapToTarget();controls();wake();}}
 root.addEventListener('wheel',e=>{if(credits.open||leaving||e.ctrlKey)return;e.preventDefault();const factor=e.deltaMode===1?20:e.deltaMode===2?innerHeight:1;scrollJourney((Math.abs(e.deltaX)>Math.abs(e.deltaY)?e.deltaX:e.deltaY)*factor);},{passive:false});
 previous.onclick=()=>go(Math.ceil(journey.target-.001)-1);next.onclick=()=>go(Math.floor(journey.target+.001)+1);
 root.addEventListener('pointermove',e=>{if(journeyFrame(journey.value).work>.99)return;const x=e.clientX/innerWidth,y=e.clientY/innerHeight;root.style.setProperty('--mx',`${(x*100).toFixed(1)}%`);root.style.setProperty('--my',`${(y*100).toFixed(1)}%`);if(!reduced.matches){scene?.pointer(x*2-1,y*2-1);warp.pointer(x-.5);}},{passive:true});

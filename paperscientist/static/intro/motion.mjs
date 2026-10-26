@@ -1,24 +1,33 @@
 // Pure navigation/mixing math, shared by the scene and regression tests.
 export const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 export const smooth = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+const PAGE_GESTURE_GAP=320, BOUNDARY_PAUSE=.18;
 export class Journey {
-  constructor(last = 5) { this.last = last; this.target = 0; this.value = 0; this.velocity = 0; this.lastWheel = -Infinity; this.direction = 0; this.used = false; this.delta = 0; this.scrubbing=false; }
-  go(target, instant = false) { this.target = clamp(target, 0, this.last); this.scrubbing=false; if (instant) { this.value = this.target; this.velocity = 0; } }
+  constructor(last = 5) { this.last = last; this.target = 0; this.value = 0; this.velocity = 0; this.lastWheel = -Infinity; this.direction = 0; this.used = false; this.delta = 0; this.scrubbing=false; this.boundaryTime=BOUNDARY_PAUSE; this.travelDirection=0; }
+  go(target, instant = false) { this.target = clamp(target, 0, this.last); this.travelDirection=Math.sign(this.target-this.value); this.scrubbing=false; this.boundaryTime=0; if (instant) this.snapToTarget(); }
+  snapToTarget(){this.value=this.target;this.velocity=0;this.boundaryTime=BOUNDARY_PAUSE;}
   wheel(delta, now, range=null) {
     const direction = Math.sign(delta);
     if (!direction) return false;
-    const fresh=now-this.lastWheel>180||direction!==this.direction;
+    const inWork=range&&this.target>=range.start&&this.target<=range.end;
+    const fresh=now-this.lastWheel>(inWork?180:PAGE_GESTURE_GAP)||direction!==this.direction;
     if (fresh) { this.used = false; this.delta = 0; }
     this.lastWheel = now; this.direction = direction; this.delta += delta;
-    if(range&&this.target>=range.start&&this.target<=range.end){
+    const ready=this.boundaryTime>=BOUNDARY_PAUSE;
+    // Retraction remains immediate. Forward input cannot stack destinations
+    // before the current page has arrived and had a short breathing space.
+    const reversing=!this.scrubbing&&this.moving&&direction===-this.travelDirection;
+    if(inWork){
       // Do not let the inertia of the entrance gesture skip through the work.
       if(this.used&&!this.scrubbing&&!fresh)return false;
       const outside=this.target===range.start&&direction<0||this.target===range.end&&direction>0;
-      if(outside){if(!fresh)return false;this.used=true;this.go(this.target+direction);return true;}
+      if(outside){if(!fresh||(!ready&&!reversing)||Math.abs(this.delta)<18)return false;this.used=true;this.go(this.target+direction);return true;}
+      if(!this.scrubbing&&!ready){this.used=true;return false;}
       const next=clamp(this.target+delta*range.sensitivity,range.start,range.end);
-      this.used=true;this.scrubbing=true;const changed=next!==this.target;this.target=next;return changed;
+      this.used=true;this.scrubbing=true;const changed=next!==this.target;this.target=next;if(changed)this.boundaryTime=0;return changed;
     }
     if (this.used || Math.abs(this.delta) < 18) return false;
+    if(!ready&&!reversing){this.used=true;return false;}
     this.used = true; this.go(this.target + direction); return true;
   }
   tick(dt, omega=5) {
@@ -28,6 +37,7 @@ export class Journey {
     const decay = Math.exp(-omega * Math.min(dt, .08));
     this.value = this.target + (x + b * Math.min(dt, .08)) * decay;
     this.velocity = (this.velocity - omega * b * Math.min(dt, .08)) * decay;
+    this.boundaryTime=Math.abs(this.value-this.target)<.035&&Math.abs(this.velocity)<.25?Math.min(BOUNDARY_PAUSE,this.boundaryTime+Math.min(dt,.08)):0;
     if (Math.abs(this.value - this.target) < .0002 && Math.abs(this.velocity) < .001) { this.value = this.target; this.velocity = 0; }
     return this.value;
   }
