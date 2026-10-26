@@ -1,15 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {lensPoint,makeGravitySeeds,fieldPoint,fieldStrength} from '../paperscientist/static/intro/gravity.mjs';
+import {makeGravitySeeds,fieldPoint,fieldStrength} from '../paperscientist/static/intro/gravity.mjs';
 import {workCamera} from '../paperscientist/static/intro/work-layout.mjs';
 import {createConstellation} from '../paperscientist/static/intro/constellation.js';
-
-test('gravity lens has a finite centre, bends nearby rays, and leaves distant stars undisturbed',()=>{
- assert.deepEqual(lensPoint(0,0),{x:0,y:0});
- assert.ok(lensPoint(.3,0).y>.03);
- assert.ok(Math.abs(lensPoint(30,0).x-30)<.01);
- for(let x=-3;x<=3;x+=.1)for(let y=-3;y<=3;y+=.1){const p=lensPoint(x,y);assert.ok(Number.isFinite(p.x)&&Number.isFinite(p.y));assert.ok(Math.hypot(p.x,p.y)<6);}
-});
 
 test('fixed particle orbits remain finite at all camera phases and retrace the same focus path',()=>{
  const seeds=makeGravitySeeds();assert.equal(seeds.length,420);assert.deepEqual(seeds,makeGravitySeeds());

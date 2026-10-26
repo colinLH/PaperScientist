@@ -1,6 +1,6 @@
 import {smooth} from './motion.mjs';
 import {railLayout,railCard,progressForCard,playingCards,portalBounds,cameraTile,workPixelRatio,workScrollRange} from './work-layout.mjs';
-import {makeGravitySeeds,drawGravityField,fieldStrength} from './gravity.mjs';
+import {makeGravitySeeds,drawPortalField,fieldStrength} from './gravity.mjs';
 import {papers,createPreviewPlayback} from './paper-previews.mjs';
 
 const outlines=[
@@ -13,7 +13,7 @@ const style=(el,key,value)=>{if(el.style[key]!==value)el.style[key]=value;};
 const data=(el,key,value)=>{if(el.dataset[key]!==value)el.dataset[key]=value;};
 
 export function createWork(root,wake,navigate=()=>{}){
-  const wall=root.querySelector('.work-wall'),grid=root.querySelector('.work-grid'),trail=root.querySelector('.work-trail');
+  const wall=root.querySelector('.work-wall'),trail=root.querySelector('.work-trail');
   const nav=root.querySelector('.work-picker'),caption=root.querySelector('.work-caption'),playButton=root.querySelector('.work-playback');
   const canvas=document.createElement('canvas');canvas.className='work-canvas';canvas.setAttribute('aria-hidden','true');wall.append(canvas);
   const field=makeGravitySeeds(),aim={x:0,y:0},lean={x:0,y:0};
@@ -34,22 +34,16 @@ export function createWork(root,wake,navigate=()=>{}){
   const buttons=papers.map((paper,i)=>{const b=document.createElement('button');b.type='button';b.textContent=String(i+1).padStart(2,'0');b.title=paper.name;b.setAttribute('aria-label',`定位 ${paper.name}`);b.onclick=e=>navigate(6+progressForCard(i,layout)*2,e.detail===0);nav.append(b);return b;});
   if(playButton)playButton.onclick=()=>{enabled=!enabled;explicitPlayback=true;playback.retry();updatePlayback();};
 
-  function buildGrid(){
-    const ns='http://www.w3.org/2000/svg',paths=[];grid.setAttribute('viewBox',`0 0 ${width} ${height}`);
-    for(let i=-10;i<=10;i++){const x=width*.5+i*width/18,center=width*.5+i*width/25;paths.push(`M${x} 0 C${center} ${height*.25},${center} ${height*.75},${x} ${height}`);}
-    for(let i=-6;i<=6;i++){const y=height*.5+i*height/10,bend=(y-height*.5)*.34;paths.push(`M0 ${y+bend} Q${width*.5} ${y-bend},${width} ${y+bend}`);}
-    grid.replaceChildren(...paths.map(d=>{const p=document.createElementNS(ns,'path');p.setAttribute('d',d);return p;}));
-  }
   function resize(){
     width=Math.max(1,innerWidth);height=Math.max(1,innerHeight);ratio=workPixelRatio(width,height,devicePixelRatio||1);layout=railLayout(width,height);
     canvas.width=Math.round(width*ratio);canvas.height=Math.round(height*ratio);
     for(const card of cards){card.element.style.width=`${layout.cardWidth}px`;card.element.style.height=`${layout.cardHeight}px`;}
-    buildGrid();lastKey='';
+    lastKey='';
   }
   function draw(state,time){
     if(!ctx)return;const camera=state.camera,b=portalBounds(width,height,camera);
-    ctx.setTransform(ratio,0,0,ratio,0,0);ctx.clearRect(0,0,width,height);drawGravityField(ctx,width,height,camera,time,field,lean);ctx.save();
-    ctx.beginPath();ctx.roundRect(b.x-4,b.y-4,b.width+8,b.height+8,b.radius+4);ctx.strokeStyle='#13040c';ctx.lineWidth=1;ctx.stroke();
+    ctx.setTransform(ratio,0,0,ratio,0,0);ctx.clearRect(0,0,width,height);drawPortalField(ctx,width,height,camera,time,field,lean);ctx.save();
+    ctx.beginPath();ctx.roundRect(b.x-4,b.y-4,b.width+8,b.height+8,b.radius+4);ctx.strokeStyle='#759bad';ctx.lineWidth=1;ctx.stroke();
     ctx.beginPath();ctx.roundRect(b.x,b.y,b.width,b.height,b.radius);ctx.fillStyle='#080406';ctx.fill();ctx.clip();
     if(camera.phase===0){const tile=cameraTile(12,25,width,height,camera,0);ctx.drawImage(sprite,tile.x,tile.y,tile.width,tile.height);}
     else for(let i=0;i<25;i++){const tile=cameraTile(i,25,width,height,camera,state.workProgress);if(tile&&tile.x+tile.width>=0&&tile.x<=width)ctx.drawImage(sprite,tile.x,tile.y,tile.width,tile.height);}
@@ -72,8 +66,7 @@ export function createWork(root,wake,navigate=()=>{}){
     style(root,'opacity',String(state.work));data(root,'open',String(state.gallery));data(root,'fieldParticles',String(fieldActive?field.length:0));nav.inert=!state.gallery;
     // No time-driven movement: pausing the wheel preserves every card and
     // letter position. Reversing it retraces precisely the same coordinates.
-    draw(state,reduce?0:time);style(grid,'transform',`scale(${state.camera.zoom})`);
-    style(grid,'opacity',String(.38*(1-smooth((state.aperture-.65)/.35))));
+    draw(state,reduce?0:time);
     style(trail,'opacity',String(smooth((state.aperture-.76)/.24)));trail.inert=!state.gallery;
     const rects=cards.map(card=>{
       const r=railCard(card.index,state.workProgress,layout);style(card.element,'transform',`translate3d(${r.x.toFixed(3)}px,${r.y.toFixed(3)}px,0)`);

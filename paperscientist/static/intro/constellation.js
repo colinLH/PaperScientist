@@ -4,13 +4,13 @@ import {createGlowPath,circlePath} from './glow-path.js';
 // Original research atlas: four navigation hubs, triangulated branches and
 // screen-space optical markers. All lines/markers remain vector geometry at 4K.
 export function createConstellation(){
-  const group=new THREE.Group(),resources=[],paths=[];
+  const group=new THREE.Group(),float=new THREE.Group(),resources=[],paths=[];group.add(float);
   const coords=[[-49,7],[-38,23],[-23,28],[-24,5],[-42,-13],[-26,-25],[-6,-17],[-5,10],
     [9,28],[22,12],[43,23],[51,1],[37,-18],[14,-24],[19,-5],[3,-1]];
   const points=coords.map(([x,y])=>new THREE.Vector3(x+30,y+110,-280));
   const main=[[0,1],[1,2],[2,7],[7,8],[8,9],[9,10],[10,11],[11,12],[12,13],[13,6],[6,5],[5,4],[4,0],[3,7],[7,9],[9,14],[14,13],[3,4],[3,5],[7,15],[15,6]];
   const secondary=[[0,3],[1,3],[2,3],[3,6],[6,14],[7,14],[9,11],[11,14],[12,14],[14,15]];
-  function path(lines,opts){const p=createGlowPath(lines,opts);group.add(p.mesh);resources.push(p.geometry,p.material);paths.push(p);return p;}
+  function path(lines,opts){const p=createGlowPath(lines,opts);float.add(p.mesh);resources.push(p.geometry,p.material);paths.push(p);return p;}
   const routes=path(main.map(([a,b])=>[points[a],points[b]]),{color:'#8cdeff',width:1.45,glow:5,flow:.65});
   const links=path(secondary.map(([a,b])=>[points[a],points[b]]),{color:'#779de8',width:.65,glow:2.2,flow:.16});
   const rings=[];
@@ -36,8 +36,20 @@ float a=(core+halo+diamond*.4+rays+ring)*opacity*(.92+.08*sin(time*1.4+rank*8.))
 if(a<.004)discard;gl_FragColor=vec4(mix(vec3(.35,.72,1.),vec3(1.),min(1.,core+diamond+rays)),a);
 #include <colorspace_fragment>
 }`});
-  const nodes=new THREE.Points(geo,mat);nodes.frustumCulled=false;group.add(nodes);resources.push(geo,mat);
-  return {group,resize(w,h,dpr){paths.forEach(p=>p.resize(w,h,dpr));uniforms.scale.value=dpr*Math.min(1.4,Math.max(.7,h/900));},
-    render(night,time){group.visible=night>.001;routes.uniforms.opacity.value=night*.85;links.uniforms.opacity.value=night*.38;orbit.uniforms.opacity.value=night*.65;paths.forEach(p=>p.uniforms.time.value=time);uniforms.opacity.value=night;uniforms.time.value=time;},
+  const nodes=new THREE.Points(geo,mat);nodes.frustumCulled=false;float.add(nodes);resources.push(geo,mat);
+  // Visible travelling signals add a second rhythm to the slowly floating map.
+  const signalGeo=new THREE.BufferGeometry(),signals=new Float32Array(main.length*3);
+  signalGeo.setAttribute('position',new THREE.BufferAttribute(signals,3).setUsage(THREE.DynamicDrawUsage));
+  const signalMat=mat.clone();signalMat.uniforms=THREE.UniformsUtils.clone(uniforms);
+  signalGeo.setAttribute('importance',new THREE.Float32BufferAttribute(main.map(()=>.4),1));
+  const signalPoints=new THREE.Points(signalGeo,signalMat);signalPoints.frustumCulled=false;float.add(signalPoints);resources.push(signalGeo,signalMat);
+  return {group,resize(w,h,dpr){paths.forEach(p=>p.resize(w,h,dpr));uniforms.scale.value=dpr*Math.min(1.4,Math.max(.7,h/900));signalMat.uniforms.scale.value=uniforms.scale.value*.45;},
+    render(night,time){group.visible=night>.001;if(!group.visible)return;
+      float.position.set(Math.sin(time*.13)*1.5,Math.sin(time*.19)*1.8,Math.sin(time*.11)*2.5);
+      // Rotate around the map's own centre so its composition stays in place.
+      const angle=Math.sin(time*.12)*.012;float.rotation.z=angle;float.position.x+=30*(1-Math.cos(angle))+110*Math.sin(angle);float.position.y+=110*(1-Math.cos(angle))-30*Math.sin(angle);
+      main.forEach(([a,b],i)=>{const t=(time*(.09+i%3*.012)+i*.173)%1;signals[i*3]=points[a].x+(points[b].x-points[a].x)*t;signals[i*3+1]=points[a].y+(points[b].y-points[a].y)*t;signals[i*3+2]=points[a].z;});signalGeo.attributes.position.needsUpdate=true;
+      signalMat.uniforms.opacity.value=night*.9;signalMat.uniforms.time.value=time;
+      routes.uniforms.opacity.value=night*.85;links.uniforms.opacity.value=night*.38;orbit.uniforms.opacity.value=night*(.65+.15*Math.sin(time*.7));paths.forEach(p=>p.uniforms.time.value=time*1.6);uniforms.opacity.value=night;uniforms.time.value=time;},
     dispose(){resources.forEach(r=>r.dispose());}};
 }

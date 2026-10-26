@@ -1,6 +1,5 @@
 import {clamp} from './motion.mjs';
 import {warpDepth} from './journey-map.mjs';
-import {lensPoint} from './gravity.mjs';
 
 // Adapted from the user's 095-starfield-warp reference: 400 projected stars,
 // colored rounded trails, a mouse-steered vanishing point and five speeds.
@@ -38,8 +37,7 @@ export function createWarp(canvas) {
     haze.addColorStop(0,'#142146'); haze.addColorStop(.25,'#080d25'); haze.addColorStop(1,'#02030a');
     ctx.fillStyle=haze; ctx.fillRect(0,0,w,h); ctx.lineCap='round';
     const lensScale=Math.min(w,h)*.19;
-    // Nested, tilted geodesics reveal the spatial curvature without a costly
-    // fullscreen distortion buffer. Stars and trails use the same lens map.
+    // Keep the gravity-well backdrop; straight rays restore the original warp.
     for(let i=0;i<7;i++){
       const radius=lensScale*(.58+i*.27),angle=-.32+steer*.3;
       ctx.beginPath();ctx.ellipse(cx,cy,radius,radius*(.36+i*.055),angle,0,Math.PI*2);
@@ -50,12 +48,11 @@ export function createWarp(canvas) {
     ctx.fillStyle=well;ctx.fillRect(cx-lensScale,cy-lensScale,lensScale*2,lensScale*2);
     for (const s of stars) {
       const z = warpDepth(s.z,travel), tail = clamp(z+motion*.9,.055,1);
-      const head=lensPoint(s.x/z,s.y/z),back=lensPoint(s.x/tail,s.y/tail),middle=lensPoint(s.x/((z+tail)/2),s.y/((z+tail)/2),1.08);
-      const x = cx+head.x*scale, y=cy+head.y*scale;
+      const x = cx+s.x/z*scale, y=cy+s.y/z*scale;
       if(x < -80 || x > w+80 || y < -80 || y > h+80) continue;
       const t=1-z; ctx.globalAlpha=Math.min(1,.15+t*1.15); ctx.strokeStyle=s.color;
       ctx.lineWidth=Math.min(2.6,.35+t*2.3);
-      ctx.beginPath();ctx.moveTo(cx+back.x*scale,cy+back.y*scale);ctx.quadraticCurveTo(cx+middle.x*scale,cy+middle.y*scale,x+.1,y+.1);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(cx+s.x/tail*scale,cy+s.y/tail*scale);ctx.lineTo(x+.1,y+.1);ctx.stroke();
     }
     ctx.globalAlpha=1;canvas.dataset.direction=motion<0?'reverse':'forward';
   }

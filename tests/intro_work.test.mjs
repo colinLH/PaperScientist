@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Journey} from '../paperscientist/static/intro/motion.mjs';
-import {WORK_RANGE,CURTAIN_START,CURTAIN_END,railLayout,railCard,playingCards,progressForCard,entryForCard,wallTile,workPixelRatio,workCamera,portalBounds,cameraTile,workSpring,workScrollRange,columnPitch} from '../paperscientist/static/intro/work-layout.mjs';
+import {WORK_RANGE,CURTAIN_START,CURTAIN_END,railLayout,railCard,playingCards,progressForCard,entryForCard,wallTile,workPixelRatio,workCamera,portalBounds,cameraTile,workSpring,workScrollRange,workDistance} from '../paperscientist/static/intro/work-layout.mjs';
 import {createPreviewPlayback} from '../paperscientist/static/intro/paper-previews.mjs';
 
 test('at most two curtains including partial edges, disjoint alternating rails across viewport sizes',()=>{
@@ -58,6 +58,17 @@ test('camera pushes in before unfolding and folds before pulling back over the s
  assert.equal(workSpring(5.2,6),6);assert.equal(workSpring(8.2,9),6);assert.equal(workSpring(6.5,6.8),11);
 });
 
+test('closed WORK remains central after narrow resize at both entrance and exit',()=>{
+ for(const [w,h] of [[320,568],[390,844],[768,1024],[1280,720],[3840,2160]]){
+  for(const position of [5,9])for(const progress of [0,1]){
+   const tile=cameraTile(12,25,w,h,workCamera(position),progress);
+   assert.ok(tile&&Object.values(tile).every(Number.isFinite));
+   assert.ok(Math.abs(tile.x+tile.width/2-w/2)<1e-8);
+   assert.ok(Math.abs(tile.y+tile.height/2-h/2)<1e-8);
+  }
+ }
+});
+
 test('cylindrical wall follows progress left, remains finite, and drawing resolution is bounded at 4K',()=>{
  const a=wallTile(12,25,1280,720,1,.2),b=wallTile(12,25,1280,720,1,.21);assert.ok(b.x<a.x);
  for(const [w,h] of [[390,844],[1280,720],[3840,2160]]){
@@ -66,16 +77,15 @@ test('cylindrical wall follows progress left, remains finite, and drawing resolu
  }
 });
 
-test('one wheel gesture moves one letter column regardless of delta or trailing inertia',()=>{
+test('one wheel gesture advances a third of the viewport regardless of delta or trailing inertia',()=>{
  for(const [w,h] of [[390,844],[1280,720],[3840,2160]]){
   const range=workScrollRange(w,h),layout=railLayout(w,h),j=new Journey(10);j.go(6.5,true);
   const before=railCard(1,(j.target-6)/2,layout);
   j.wheel(9000,0,range);
   for(let t=16;t<300;t+=16){j.wheel(120,t,range);j.tick(1/60,11);}
   assert.ok(Math.abs(j.target-(6.5+range.step))<1e-10);
-  const after=railCard(1,(j.target-6)/2,layout);assert.ok(Math.abs(before.x-after.x-columnPitch(w))<1e-8);
-  const p=.25,t0=wallTile(14,25,w,h,1,p),t1=wallTile(15,25,w,h,1,p+range.step/2);
-  if(t0&&t1){assert.ok(Math.abs(t0.x-t1.x)<1e-8);assert.ok(Math.abs(t0.width-t1.width)<1e-8);}
+  const after=railCard(1,(j.target-6)/2,layout);assert.ok(Math.abs(before.x-after.x-w/3)<1e-8);
+  assert.ok(Math.abs(workDistance(.25+range.step/2,layout)-workDistance(.25,layout)-w/3)<1e-8);
   const value=j.value,velocity=j.velocity;j.wheel(-120,310,range);
   assert.equal(j.value,value);assert.equal(j.velocity,velocity);assert.ok(Math.abs(j.target-6.5)<1e-10);
   j.wheel(30,600,range);assert.ok(Math.abs(j.target-(6.5+range.step))<1e-10);

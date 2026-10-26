@@ -35,7 +35,7 @@ test('star depth is periodic and reversible',()=>{
 
 test('warp skips all hidden drawing, keeps 400 particles across UHD resizes, and stops moving for reduced motion',()=>{
  Object.assign(globalThis,{innerWidth:3840,innerHeight:2160,devicePixelRatio:2});
- let strokes=0,segments=[];const ctx={setTransform(){},clearRect(){segments=[];},fillRect(){},createRadialGradient(){return {addColorStop(){}};},beginPath(){},ellipse(){},quadraticCurveTo(...v){segments.push(v);},moveTo(x,y){segments.push([x,y]);},lineTo(x,y){segments.push([x,y]);},stroke(){strokes++;}};
+ let strokes=0,segments=[];const ctx={setTransform(){},clearRect(){segments=[];},fillRect(){},createRadialGradient(){return {addColorStop(){}};},beginPath(){},ellipse(){},quadraticCurveTo(){assert.fail('Warp rays must remain straight');},moveTo(x,y){segments.push([x,y]);},lineTo(x,y){segments.push([x,y]);},stroke(){strokes++;}};
  const canvas={getContext:()=>ctx,style:{},dataset:{}};const warp=createWarp(canvas);
  assert.equal(canvas.dataset.particles,400);assert.ok(canvas.width*canvas.height<=2604000);
  warp.render(3,1,1/30);assert.ok(strokes>0);const count=strokes;

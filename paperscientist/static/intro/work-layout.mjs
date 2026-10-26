@@ -1,7 +1,7 @@
 import {clamp} from './motion.mjs';
 
 export const WORK_RANGE={start:6,end:8,step:.02};
-export const CURTAIN_START=.03,CURTAIN_END=.97,CURTAIN_COUNT=6;
+export const CURTAIN_START=.09,CURTAIN_END=.91,CURTAIN_COUNT=6;
 export const wrap=(n,span)=>((n%span)+span)%span;
 
 // Solve the existing --ease-in-out (.77,0,.175,1) rather than adding a second
@@ -36,7 +36,7 @@ export const columnPitch=width=>width*.71*(width<700?.24:.105);
 export function workDistance(progress,layout){return (clamp(progress,0,1)-CURTAIN_START)/(CURTAIN_END-CURTAIN_START)*layout.travel;}
 export function workScrollRange(width,height){
   const layout=railLayout(width,height);
-  return {...WORK_RANGE,step:2*columnPitch(width)*(CURTAIN_END-CURTAIN_START)/layout.travel};
+  return {...WORK_RANGE,step:2*(width/3)*(CURTAIN_END-CURTAIN_START)/layout.travel};
 }
 export function railCard(index,progress,layout){
   const {width,top,gapY,cardWidth,cardHeight,handoff}=layout;
@@ -72,8 +72,11 @@ export function wallTile(index,count,width,height,aperture,progress){
   return {x,y:(height-h)/2,width:w,height:h,alpha:aperture};
 }
 export function cameraTile(index,count,width,height,camera,progress){
-  const tile=wallTile(index,count,width,height,1,progress);if(!tile)return null;
   const closedW=width/(width<700?7.5:18.5)*.88*(1+.25*camera.focus),closedH=height*(.52+.12*camera.focus);
+  // The closed portal is always central, independent of offscreen wall columns.
+  // In particular, a narrow resize must not cull its only WORK glyph.
+  if(camera.phase===0)return {x:(width-closedW)/2,y:(height-closedH)/2,width:closedW,height:closedH};
+  const tile=wallTile(index,count,width,height,1,progress);if(!tile)return null;
   // Individual columns become slim as they separate; retaining the capsule's
   // full glyph width here would smear the middle into a solid red rectangle.
   const w=closedW*(1-portalEase(camera.unfold/.5))+tile.width*Math.sqrt(camera.spread);
