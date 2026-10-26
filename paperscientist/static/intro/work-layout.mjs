@@ -1,7 +1,7 @@
 import {clamp} from './motion.mjs';
 
-export const WORK_RANGE={start:6,end:8,sensitivity:1/900};
-export const CURTAIN_START=.16,CURTAIN_END=.92,CURTAIN_COUNT=6;
+export const WORK_RANGE={start:6,end:8,step:.02};
+export const CURTAIN_START=.03,CURTAIN_END=.97,CURTAIN_COUNT=6;
 export const wrap=(n,span)=>((n%span)+span)%span;
 
 // Solve the existing --ease-in-out (.77,0,.175,1) rather than adding a second
@@ -32,9 +32,15 @@ export function railLayout(width,height){
   const handoff=width+cardWidth*.7,travel=(CURTAIN_COUNT-1)*handoff+width+cardWidth;
   return {width,height,top,gapY,cardWidth,cardHeight,handoff,travel};
 }
+export const columnPitch=width=>width*.71*(width<700?.24:.105);
+export function workDistance(progress,layout){return (clamp(progress,0,1)-CURTAIN_START)/(CURTAIN_END-CURTAIN_START)*layout.travel;}
+export function workScrollRange(width,height){
+  const layout=railLayout(width,height);
+  return {...WORK_RANGE,step:2*columnPitch(width)*(CURTAIN_END-CURTAIN_START)/layout.travel};
+}
 export function railCard(index,progress,layout){
-  const {width,top,gapY,cardWidth,cardHeight,handoff,travel}=layout;
-  const row=(index+1)%2,distance=(clamp(progress,0,1)-CURTAIN_START)/(CURTAIN_END-CURTAIN_START)*travel;
+  const {width,top,gapY,cardWidth,cardHeight,handoff}=layout;
+  const row=(index+1)%2,distance=workDistance(progress,layout);
   const x=width+index*handoff-distance;
   const y=top+row*(cardHeight+gapY);
   return {index,row,x,y,width:cardWidth,height:cardHeight,visible:x+cardWidth>0&&x<width};
@@ -56,7 +62,7 @@ export function playingCards(rects,width,current=[]){
 }
 
 export function wallTile(index,count,width,height,aperture,progress){
-  const offset=wrap(index-count/2-clamp(progress,0,1)*14+count/2,count)-count/2;
+  const offset=wrap(index-count/2-workDistance(progress,railLayout(width,height))/columnPitch(width)+count/2,count)-count/2;
   const angle=offset*(width<700?.24:.105);
   if(Math.abs(angle)>1.23)return null;
   const radius=width*.71,depth=1-(1-Math.cos(angle))*radius*aperture/(width*.85);

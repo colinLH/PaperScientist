@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Journey} from '../paperscientist/static/intro/motion.mjs';
-import {WORK_RANGE,CURTAIN_START,CURTAIN_END,railLayout,railCard,playingCards,progressForCard,entryForCard,wallTile,workPixelRatio,workCamera,portalBounds,cameraTile,workSpring} from '../paperscientist/static/intro/work-layout.mjs';
+import {WORK_RANGE,CURTAIN_START,CURTAIN_END,railLayout,railCard,playingCards,progressForCard,entryForCard,wallTile,workPixelRatio,workCamera,portalBounds,cameraTile,workSpring,workScrollRange,columnPitch} from '../paperscientist/static/intro/work-layout.mjs';
 import {createPreviewPlayback} from '../paperscientist/static/intro/paper-previews.mjs';
 
 test('at most two curtains including partial edges, disjoint alternating rails across viewport sizes',()=>{
@@ -66,24 +66,31 @@ test('cylindrical wall follows progress left, remains finite, and drawing resolu
  }
 });
 
-test('wheel magnitude scrubs Work continuously; entrance and exit inertia cannot skip the gallery',()=>{
- const j=new Journey(10);j.go(5,true);j.wheel(100,1000,WORK_RANGE);
- for(let t=1010;t<1200;t+=10)j.wheel(30,t,WORK_RANGE);assert.equal(j.target,6);
- assert.equal(j.wheel(90,1500,WORK_RANGE),false);for(let i=0;i<60;i++)j.tick(1/60,11);
- j.wheel(90,2500,WORK_RANGE);assert.equal(j.target,6.1);j.wheel(45,2510,WORK_RANGE);assert.ok(Math.abs(j.target-6.15)<1e-9);
- j.tick(1/60,11);const pos=j.value,velocity=j.velocity;j.wheel(-45,2520,WORK_RANGE);
- assert.equal(j.value,pos);assert.equal(j.velocity,velocity);assert.ok(Math.abs(j.target-6.1)<1e-9);
- j.wheel(9000,3000,WORK_RANGE);assert.equal(j.target,8);j.wheel(100,3010,WORK_RANGE);assert.equal(j.target,8);
- assert.equal(j.wheel(100,3300,WORK_RANGE),false);for(let i=0;i<90;i++)j.tick(1/60,11);
- j.wheel(100,5000,WORK_RANGE);assert.equal(j.target,9);
+test('one wheel gesture moves one letter column regardless of delta or trailing inertia',()=>{
+ for(const [w,h] of [[390,844],[1280,720],[3840,2160]]){
+  const range=workScrollRange(w,h),layout=railLayout(w,h),j=new Journey(10);j.go(6.5,true);
+  const before=railCard(1,(j.target-6)/2,layout);
+  j.wheel(9000,0,range);
+  for(let t=16;t<300;t+=16){j.wheel(120,t,range);j.tick(1/60,11);}
+  assert.ok(Math.abs(j.target-(6.5+range.step))<1e-10);
+  const after=railCard(1,(j.target-6)/2,layout);assert.ok(Math.abs(before.x-after.x-columnPitch(w))<1e-8);
+  const p=.25,t0=wallTile(14,25,w,h,1,p),t1=wallTile(15,25,w,h,1,p+range.step/2);
+  if(t0&&t1){assert.ok(Math.abs(t0.x-t1.x)<1e-8);assert.ok(Math.abs(t0.width-t1.width)<1e-8);}
+  const value=j.value,velocity=j.velocity;j.wheel(-120,310,range);
+  assert.equal(j.value,value);assert.equal(j.velocity,velocity);assert.ok(Math.abs(j.target-6.5)<1e-10);
+  j.wheel(30,600,range);assert.ok(Math.abs(j.target-(6.5+range.step))<1e-10);
+ }
 });
 
-test('Work keeps fine-grained scroll and reversals unrestricted inside its boundaries',()=>{
- const j=new Journey(10);j.go(6.5,true);
- for(let i=0;i<30;i++){assert.equal(j.wheel(3,i*16,WORK_RANGE),true);j.tick(1/60,11);}
- assert.ok(Math.abs(j.target-6.6)<1e-10);
- for(let i=30;i<60;i++){assert.equal(j.wheel(-3,i*16,WORK_RANGE),true);j.tick(1/60,11);}
- assert.ok(Math.abs(j.target-6.5)<1e-10);
+test('small trackpad events accumulate once; entrance and exit retain boundary protection',()=>{
+ const range=workScrollRange(1280,720),j=new Journey(10);j.go(5,true);j.wheel(100,0,range);
+ for(let t=10;t<200;t+=10)j.wheel(30,t,range);assert.equal(j.target,6);
+ assert.equal(j.wheel(90,500,range),false);for(let i=0;i<120;i++)j.tick(1/60,6);
+ for(let t=1000;t<1480;t+=16)j.wheel(3,t,range);
+ assert.ok(Math.abs(j.target-(6+range.step))<1e-10);
+ j.go(8-range.step/2,true);j.wheel(9999,2000,range);assert.equal(j.target,8);
+ j.wheel(100,2010,range);assert.equal(j.target,8);assert.equal(j.wheel(100,2400,range),false);
+ for(let i=0;i<120;i++)j.tick(1/60,11);assert.equal(j.wheel(100,4000,range),true);assert.equal(j.target,9);
 });
 
 test('Work spring reaches the destination sooner without discontinuous mid-flight reversal',()=>{

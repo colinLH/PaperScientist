@@ -4,7 +4,7 @@ import {mistEnvelope} from './atmosphere.mjs';
 import {LAST_STOP,chapterStops,journeyFrame} from './journey-map.mjs';
 import {createWarp} from './warp.js';
 import {createWork} from './work.js';
-import {WORK_RANGE,workSpring} from './work-layout.mjs';
+import {workSpring} from './work-layout.mjs';
 
 const chapters=[
   {name:'雾中的问题',label:'向未知出发',title:'每一个发现，\n始于一个好问题。',description:'穿过已知的边界，让好奇心带路。'},
@@ -40,15 +40,15 @@ function paint(now=performance.now(),dt=1/30){
   audio.update(state.music);drawn=p;
 }
 function fastWork(){return journey.value>4.6&&journey.value<9.7||journey.target>=5&&journey.target<=9;}
-function tick(now){frame=0;if(dead||document.hidden||credits.open)return;const fast=fastWork();if(fast&&now+.25<nextPaint){frame=requestAnimationFrame(tick);return;}nextPaint=fast?(nextPaint&&now-nextPaint<50?nextPaint+1000/60:now+1000/60):0;const dt=last?Math.min((now-last)/1000,.08):1/60;last=now;journey.tick(dt,fast?workSpring(journey.value,journey.target):5);paint(now,dt);if(journey.moving||ambient())schedule();else{last=nextPaint=0;data(root,'renderState','idle');}}
-function ambient(){return !leaving&&(journeyFrame(journey.value).work<.999&&!reduced.matches||hands?.moving);}
+function tick(now){frame=0;if(dead||document.hidden||credits.open)return;const fast=fastWork(),interval=1000/(journey.moving?60:30);if(fast&&now+.25<nextPaint){frame=requestAnimationFrame(tick);return;}nextPaint=fast?(nextPaint&&now-nextPaint<50?nextPaint+interval:now+interval):0;const dt=last?Math.min((now-last)/1000,.08):1/60;last=now;journey.tick(dt,fast?workSpring(journey.value,journey.target):5);paint(now,dt);if(journey.moving||ambient())schedule();else{last=nextPaint=0;data(root,'renderState','idle');}}
+function ambient(){return !leaving&&(journeyFrame(journey.value).work<.999&&!reduced.matches||hands?.moving||work.animating);}
 function schedule(){if(timer||frame||dead||document.hidden)return;data(root,'renderState',journey.moving?'moving':'ambient');if(fastWork()){frame=requestAnimationFrame(tick);return;}timer=setTimeout(()=>{timer=0;frame=requestAnimationFrame(tick);},1000/30);}
 function wake(){if(!dead&&!document.hidden){if(!frame&&!timer)last=0;schedule();}}
 function cancel(){clearTimeout(timer);cancelAnimationFrame(frame);timer=frame=0;last=nextPaint=0;}
-function scrollJourney(delta){if(journey.wheel(delta,performance.now(),WORK_RANGE)){audio.arm();if(reduced.matches)journey.snapToTarget();controls();wake();}}
+function scrollJourney(delta){if(journey.wheel(delta,performance.now(),work.scrollRange())){audio.arm();if(reduced.matches)journey.snapToTarget();controls();wake();}}
 root.addEventListener('wheel',e=>{if(credits.open||leaving||e.ctrlKey)return;e.preventDefault();const factor=e.deltaMode===1?20:e.deltaMode===2?innerHeight:1;scrollJourney((Math.abs(e.deltaX)>Math.abs(e.deltaY)?e.deltaX:e.deltaY)*factor);},{passive:false});
 previous.onclick=()=>go(Math.ceil(journey.target-.001)-1);next.onclick=()=>go(Math.floor(journey.target+.001)+1);
-root.addEventListener('pointermove',e=>{if(journeyFrame(journey.value).work>.99)return;const x=e.clientX/innerWidth,y=e.clientY/innerHeight;root.style.setProperty('--mx',`${(x*100).toFixed(1)}%`);root.style.setProperty('--my',`${(y*100).toFixed(1)}%`);if(!reduced.matches){scene?.pointer(x*2-1,y*2-1);warp.pointer(x-.5);}},{passive:true});
+root.addEventListener('pointermove',e=>{const x=e.clientX/innerWidth,y=e.clientY/innerHeight;if(journeyFrame(journey.value).work>.99){if(!reduced.matches&&work.animating)work.pointer(x*2-1,y*2-1);return;}root.style.setProperty('--mx',`${(x*100).toFixed(1)}%`);root.style.setProperty('--my',`${(y*100).toFixed(1)}%`);if(!reduced.matches){scene?.pointer(x*2-1,y*2-1);warp.pointer(x-.5);}},{passive:true});
 document.addEventListener('keydown',e=>{if(credits.open||e.target.closest('input,textarea,select')||e.ctrlKey||e.metaKey||e.altKey)return;const moves={ArrowDown:1,PageDown:1,ArrowUp:-1,PageUp:-1};if(e.key in moves){e.preventDefault();if(!e.repeat)go(moves[e.key]>0?Math.floor(journey.target+.001)+1:Math.ceil(journey.target-.001)-1,true);}else if(e.key==='Home'||e.key==='End'){e.preventDefault();go(e.key==='Home'?0:LAST_STOP,true);}});
 let touchY=null,touchScrub=false;root.addEventListener('touchstart',e=>{if(credits.open||leaving)return;touchY=e.touches[0].clientY;touchScrub=journey.target>=6&&journey.target<=8;journey.lastWheel=-Infinity;},{passive:true});
 root.addEventListener('touchmove',e=>{if(touchY===null||!touchScrub)return;const y=e.touches[0].clientY;scrollJourney((touchY-y)*2);touchY=y;},{passive:true});
@@ -71,5 +71,5 @@ document.querySelectorAll('a[href="/?workspace=1"]').forEach(a=>a.addEventListen
 function dispose(){if(dead)return;dead=true;cancel();clearTimeout(resizeTimer);hands?.dispose();hands=null;warp.dispose();work.dispose();scene?.dispose();scene=null;audio.dispose();root.dataset.renderState='disposed';}
 window.addEventListener('pagehide',dispose);window.addEventListener('pageshow',e=>{if(e.persisted)location.reload();});
 controls();paint();audio.visibility(document.hidden);audio.arm();
-try{const {createScene}=await import('./scene.js?v=6');if(!dead){scene=createScene(host);paint();wake();}}catch(error){console.warn('Intro: using lightweight landscape',error.message);fallback();}
+try{const {createScene}=await import('./scene.js?v=7');if(!dead){scene=createScene(host);paint();wake();}}catch(error){console.warn('Intro: using lightweight landscape',error.message);fallback();}
 if(scene&&!dead){try{const {createHands}=await import('./hands.js?v=4');if(!dead){hands=createHands({renderer:scene.renderer,panel:document.querySelector('#hand-camera'),button:document.querySelector('#hand-toggle'),wake});paint();wake();}}catch(error){console.warn('Hand controls unavailable',error.message);document.querySelector('#hand-toggle').textContent='手势暂不可用';}}

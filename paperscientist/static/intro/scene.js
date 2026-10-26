@@ -1,6 +1,7 @@
 import * as THREE from './vendor/three.module.min.js';
 import {clamp, smooth} from './motion.mjs';
 import {createGlowPath,circlePath} from './glow-path.js';
+import {createConstellation} from './constellation.js';
 import {scenePixelRatio} from './render-quality.mjs';
 import {mistEnvelope,paintMist} from './atmosphere.mjs';
 
@@ -103,11 +104,7 @@ export function createScene(host) {
     fragmentShader:'varying vec3 vColor;varying float vAlpha;varying float vFlare;void main(){vec2 p=gl_PointCoord-.5;float d=length(p);float glow=exp(-d*d*(30.-vFlare*18.));float core=smoothstep(.12,0.,d);float rays=(exp(-abs(p.x)*90.)*exp(-abs(p.y)*7.)+exp(-abs(p.y)*90.)*exp(-abs(p.x)*7.))*vFlare;float a=(glow+core+rays)*vAlpha;if(a<.004)discard;gl_FragColor=vec4(vColor*(.8+core+rays),a);}'}));
   const stars=new THREE.Points(starsGeo,starsMat);stars.frustumCulled=false;scene.add(stars);
   const glowTex=softTexture([[0,'rgba(255,255,255,1)'],[.18,'rgba(255,255,255,.75)'],[.45,'rgba(255,255,255,.18)'],[1,'rgba(255,255,255,0)']]);
-  const network=new THREE.Group(),netPoints=[[-45,5],[-28,18],[-10,10],[10,22],[32,12],[45,-5],[22,-17],[0,-12],[-24,-23]].map(([x,y])=>new THREE.Vector3(x+30,y+110,-280));
-  const links=[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,8],[8,0],[2,7],[4,6]];
-  const constellation=lightPath(links.map(([a,b])=>[netPoints[a],netPoints[b]]),{color:'#a8e7ff',width:1.1,glow:3.6,opacity:0,flow:.12},network);
-  const netGeometry=constellation.geometry;
-  const nodeMat=material(new THREE.PointsMaterial({color:'#e4fff7',size:9,map:glowTex,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending,fog:false}));network.add(new THREE.Points(geometry(new THREE.BufferGeometry().setFromPoints(netPoints)),nodeMat));scene.add(network);
+  const atlas=createConstellation(),network=atlas.group;scene.add(network);
   const lin=hex=>{const k=new THREE.Color(hex);return `vec3(${k.r.toFixed(4)},${k.g.toFixed(4)},${k.b.toFixed(4)})`;};
   const skyMat=material(new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,uniforms:{top:{value:new THREE.Color()},bottom:{value:new THREE.Color()},sunTint:{value:new THREE.Color('#ffddb1')},sunAmount:{value:0},night:{value:0},time:{value:0},nebula:{value:null},nebulaReady:{value:0},imageAspect:{value:16/9},viewport:{value:new THREE.Vector2(1,1)},parallax:{value:new THREE.Vector2()}},
     vertexShader:'varying vec3 v; void main(){v=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
@@ -180,7 +177,7 @@ gl_FragColor=vec4(c,1.);
   let dead=false,highDetail=false;
   function setDetail(enabled){if(highDetail===enabled)return false;highDetail=enabled;resize();return true;}
   function resize(){const w=Math.max(1,host.clientWidth),h=Math.max(1,host.clientHeight);renderer.setPixelRatio(scenePixelRatio(w,h,devicePixelRatio||1,highDetail));renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();const dpr=renderer.getPixelRatio(),k=dpr*clamp(h/900,.7,1.4);starsMat.uniforms.scale.value=k;moteMat.uniforms.scale.value=k;renderer.getDrawingBufferSize(skyMat.uniforms.viewport.value);paths.forEach(path=>path.resize(w,h,dpr));
-    const fit=Math.min(1,camera.aspect/1.5);network.scale.setScalar(fit);network.position.set(0,92*(1-fit),-280*(1-fit));nodeMat.size=9*Math.sqrt(fit);
+    const fit=Math.min(1,camera.aspect/1.5);network.scale.setScalar(fit);network.position.set(0,92*(1-fit),-280*(1-fit));atlas.resize(w,h,dpr);
     host.dataset.quality=highDetail?'native-up-to-4k':'balanced';host.dataset.renderSize=`${renderer.domElement.width}x${renderer.domElement.height}`;
   }
   function pointer(x,y){aim.set(clamp(x,-1,1),clamp(y,-1,1));}
@@ -195,7 +192,7 @@ gl_FragColor=vec4(c,1.);
     const night=Math.max(0,1-Math.abs(p-3));hemi.intensity=2.1-night*1.35;sun.intensity=2.2-night*1.85;
     skyMat.uniforms.sunAmount.value=smooth((p-3.7)/1.3)*1.4;skyMat.uniforms.night.value=night;skyMat.uniforms.time.value=time;
     starsMat.uniforms.opacity.value=smooth(night*1.25);starsMat.uniforms.time.value=time;
-    constellation.uniforms.opacity.value=night*.78;paths.forEach(path=>path.uniforms.time.value=time);nodeMat.opacity=night*(.75+.25*Math.sin(time*2.1));netGeometry.setDrawRange(0,Math.round(links.length*smooth((p-2.25)/.75))*6);
+    atlas.render(night,time);paths.forEach(path=>path.uniforms.time.value=time);
     groundMaterial.color.copy(white).lerp(nightTint,night*.7);
     waterMaterial.color.copy(skyMat.uniforms.bottom.value).lerp(white,.18);
     color.copy(scene.fog.color).lerp(white,.35);
@@ -206,6 +203,6 @@ gl_FragColor=vec4(c,1.);
     renderer.render(scene,camera);host.dataset.drawCalls=renderer.info.render.calls;host.dataset.triangles=renderer.info.render.triangles;
   }
   const lost=e=>{e.preventDefault();host.dispatchEvent(new CustomEvent('scene-lost'));};renderer.domElement.addEventListener('webglcontextlost',lost);
-  function dispose(){if(dead)return;dead=true;renderer.domElement.removeEventListener('webglcontextlost',lost);resources.forEach(r=>r.dispose());renderer.dispose();renderer.forceContextLoss();renderer.domElement.remove();}
+  function dispose(){if(dead)return;dead=true;renderer.domElement.removeEventListener('webglcontextlost',lost);atlas.dispose();resources.forEach(r=>r.dispose());renderer.dispose();renderer.forceContextLoss();renderer.domElement.remove();}
   resize();return {resize,setDetail,render,pointer,dispose,renderer,canvas:renderer.domElement};
 }

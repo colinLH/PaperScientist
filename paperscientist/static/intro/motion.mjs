@@ -23,7 +23,10 @@ export class Journey {
       const outside=this.target===range.start&&direction<0||this.target===range.end&&direction>0;
       if(outside){if(!fresh||(!ready&&!reversing)||Math.abs(this.delta)<18)return false;this.used=true;this.go(this.target+direction);return true;}
       if(!this.scrubbing&&!ready){this.used=true;return false;}
-      const next=clamp(this.target+delta*range.sensitivity,range.start,range.end);
+      // A wheel/trackpad gesture owns one column. Its large initial delta and
+      // trailing inertia cannot race several previews across the viewport.
+      if(this.used&&!fresh||Math.abs(this.delta)<18)return false;
+      const next=clamp(this.target+direction*range.step,range.start,range.end);
       this.used=true;this.scrubbing=true;const changed=next!==this.target;this.target=next;if(changed)this.boundaryTime=0;return changed;
     }
     if (this.used || Math.abs(this.delta) < 18) return false;

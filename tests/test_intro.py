@@ -29,7 +29,7 @@ class IntroTests(unittest.TestCase):
             self.assertEqual(r.content, b'\x00asm')
             self.assertIn('application/wasm', r.headers['content-type'])
             self.assertEqual(c.get('/intro-assets/hand-worker.js').status_code, 200)
-            for asset in ('journey-map.mjs', 'warp.js', 'work.js', 'work-layout.mjs', 'paper-previews.mjs', 'immersive.css', 'work/atlas.svg', 'work/paper.svg'):
+            for asset in ('journey-map.mjs', 'gravity.mjs', 'constellation.js', 'warp.js', 'work.js', 'work-layout.mjs', 'paper-previews.mjs', 'immersive.css', 'work/atlas.svg', 'work/paper.svg'):
                 r = c.get('/intro-assets/' + asset)
                 self.assertEqual(r.status_code, 200, asset)
                 if asset.endswith('.svg'):
