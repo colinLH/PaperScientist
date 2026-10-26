@@ -2,20 +2,29 @@
 export const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 export const smooth = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
 export class Journey {
-  constructor(last = 5) { this.last = last; this.target = 0; this.value = 0; this.velocity = 0; this.lastWheel = -Infinity; this.direction = 0; this.used = false; this.delta = 0; }
-  go(target, instant = false) { this.target = clamp(target, 0, this.last); if (instant) { this.value = this.target; this.velocity = 0; } }
-  wheel(delta, now) {
+  constructor(last = 5) { this.last = last; this.target = 0; this.value = 0; this.velocity = 0; this.lastWheel = -Infinity; this.direction = 0; this.used = false; this.delta = 0; this.scrubbing=false; }
+  go(target, instant = false) { this.target = clamp(target, 0, this.last); this.scrubbing=false; if (instant) { this.value = this.target; this.velocity = 0; } }
+  wheel(delta, now, range=null) {
     const direction = Math.sign(delta);
     if (!direction) return false;
-    if (now - this.lastWheel > 180 || direction !== this.direction) { this.used = false; this.delta = 0; }
+    const fresh=now-this.lastWheel>180||direction!==this.direction;
+    if (fresh) { this.used = false; this.delta = 0; }
     this.lastWheel = now; this.direction = direction; this.delta += delta;
+    if(range&&this.target>=range.start&&this.target<=range.end){
+      // Do not let the inertia of the entrance gesture skip through the work.
+      if(this.used&&!this.scrubbing&&!fresh)return false;
+      const outside=this.target===range.start&&direction<0||this.target===range.end&&direction>0;
+      if(outside){if(!fresh)return false;this.used=true;this.go(this.target+direction);return true;}
+      const next=clamp(this.target+delta*range.sensitivity,range.start,range.end);
+      this.used=true;this.scrubbing=true;const changed=next!==this.target;this.target=next;return changed;
+    }
     if (this.used || Math.abs(this.delta) < 18) return false;
     this.used = true; this.go(this.target + direction); return true;
   }
-  tick(dt) {
+  tick(dt, omega=5) {
     // Exact critically damped spring. Retargeting preserves both position and
     // velocity, including a reversal halfway through a camera move.
-    const omega = 5, x = this.value - this.target, b = this.velocity + omega * x;
+    const x = this.value - this.target, b = this.velocity + omega * x;
     const decay = Math.exp(-omega * Math.min(dt, .08));
     this.value = this.target + (x + b * Math.min(dt, .08)) * decay;
     this.velocity = (this.velocity - omega * b * Math.min(dt, .08)) * decay;
