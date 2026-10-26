@@ -1,0 +1,36 @@
+/* Wodniack reference: red perspective corridor → capsule → concave WORK wall.
+   UI chrome stays quiet. The artwork is original to PaperScientist. */
+#journey{overflow:clip}
+#warp-canvas{position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none}
+#warp-controls{position:absolute;z-index:3;right:110px;bottom:104px;display:flex;align-items:center;gap:8px;color:#c5cfe2;font-size:11px}
+#warp-controls button{width:30px;height:30px;border:1px solid #c5cfe240;border-radius:4px}
+#warp-controls button[aria-pressed=true]{background:#e1f4ff;color:#101c32;border-color:#e1f4ff}
+#work-scene{position:absolute;inset:0;z-index:2;overflow:clip;background:#ed003d;color:#ed003d;isolation:isolate;user-select:none;-webkit-user-select:none}
+.work-grid{position:absolute;inset:0;width:100%;height:100%;fill:none;stroke:#13040c;stroke-width:1;opacity:.38;pointer-events:none}
+.work-portal{position:absolute;inset:0;background:#080406;overflow:clip;will-change:clip-path,transform}
+.work-wall{position:absolute;inset:0;transform-style:preserve-3d;pointer-events:none}
+.work-column{position:absolute;top:12%;left:50%;margin-left:-2.7027vw;transform-origin:center center;will-change:transform;backface-visibility:hidden}
+.work-column svg{width:100%;height:100%;overflow:visible;display:block}
+.work-trail{position:absolute;inset:0;pointer-events:none}
+.work-preview{position:absolute;width:clamp(220px,30vw,560px);margin:0;background:#080406;will-change:transform,clip-path;box-shadow:0 0 0 2px #080406}
+.work-preview img{display:block;width:100%;height:auto;aspect-ratio:1.5;object-fit:cover}
+.work-preview figcaption{position:absolute;bottom:0;left:0;background:#080406;color:#fff;padding:6px 10px;font-size:10px;letter-spacing:.05em}
+.work-guidance{position:absolute;bottom:106px;left:50%;width:min(540px,72%);transform:translateX(-50%);text-align:center;color:#ffe9ee;opacity:0;pointer-events:none;transition:opacity 180ms ease}
+#work-scene[data-open=true] .work-guidance{opacity:1;pointer-events:auto}
+.work-caption{font-size:13px;margin:0 0 14px;line-height:1.5;text-shadow:0 1px 12px #000}
+.work-picker{display:flex;justify-content:center;gap:6px}
+.work-picker button{width:32px;height:28px;background:#080406;border:1px solid #ed003d88;font-size:10px;color:#ed003d;transition:color 160ms ease,background 160ms ease}
+.work-picker button[aria-pressed=true]{color:#080406;background:#ed003d}
+.work-guidance small{display:block;margin-top:10px;font-size:10px;color:#ffbccd}
+#journey[data-immersive=true]::before,#journey[data-immersive=true]::after{opacity:0;animation-play-state:paused}
+#journey[data-immersive=true] .vignette::before,#journey[data-immersive=true] .vignette::after{opacity:0;animation-play-state:paused}
+#journey[data-work=true] #copy{visibility:hidden}
+#journey[data-work=true] header,#journey[data-work=true] footer{color:#ffe9ee}
+#journey[data-work=true] #sound[aria-pressed=true]{color:inherit}
+#journey[data-warp=true] #copy{top:31%;left:8%;width:40%}
+#journey[data-warp=true] h1{font-size:clamp(32px,4vw,62px)}
+#journey[data-warp=true] #description{font-size:13px}
+#journey[data-work=true] #hand-toggle,#journey[data-warp=true] #hand-toggle{visibility:hidden}
+@media(max-width:700px){#warp-controls{right:24px;bottom:100px}#journey[data-warp=true] #copy{top:27%;width:72%}.work-preview{width:68vw}.work-guidance{bottom:96px;width:80%}.work-column{top:18%}.work-picker button{width:28px}.work-caption{font-size:12px}}
+@media(max-height:520px){.work-guidance{bottom:65px}.work-guidance small{display:none}.work-caption{margin-bottom:5px}#warp-controls{bottom:80px}}
+@media(prefers-reduced-motion:reduce){.work-column,.work-preview,.work-portal{will-change:auto}.work-guidance{transition:none}}
