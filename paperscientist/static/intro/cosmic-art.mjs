@@ -1,5 +1,8 @@
 import {clamp,smooth} from './motion.mjs';
-import {PreludeInteraction,interactivePoint,concepts,conceptNotes,experiments,experimentNotes} from './prelude-interaction.mjs?v=2';
+import {PreludeInteraction,interactivePoint,experiments,experimentNotes} from './prelude-interaction.mjs?v=2';
+
+import {CITIES} from './earth-data.mjs';
+import {geoPoint,cityFocus,earthOpacity,EARTH_YAW,EARTH_SPEED} from './earth-geometry.mjs';
 
 // Procedural artwork inspired by the user's local 099, 138 and 195 demos.
 // A shared clock, deterministic samples and bounded canvases replace their RAFs.
@@ -53,22 +56,24 @@ export function narrativePath(u,band,p,time){
 }
 export function createPrelude(canvas){
   const ctx=canvas.getContext('2d',{alpha:true}),stars=seededStars(),dots=globeSeeds(),interaction=new PreludeInteraction();
-  const aim={x:0,y:0};let w=1,h=1,ratio=1,dead=false,lastTime=null,phase=0,cx=0,cy=0,unit=1,hits=[],lastStage=0;
+  const aim={x:0,y:0};let w=1,h=1,ratio=1,dead=false,lastTime=null,phase=0,cx=0,cy=0,unit=1,hits=[],lastStage=0,earth=null;
   const colors=['#a8edf2','#b5c9ff','#e5c694','#80d6c5','#c3b2ee','#efc9ae'];
   function resize(){w=Math.max(1,innerWidth);h=Math.max(1,innerHeight);ratio=artRatio(w,h,devicePixelRatio||1);canvas.width=Math.round(w*ratio);canvas.height=Math.round(h*ratio);}
   function dot(x,y,r,color,alpha=1){ctx.globalAlpha=alpha;ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y,Math.max(.1,r),0,TAU);ctx.fill();ctx.globalAlpha=1;}
   function render(p,time,reduced=false){
     if(dead)return;const opacity=preludeOpacity(p);canvas.hidden=opacity<.001;canvas.style.opacity=String(opacity);
-    if(!ctx||opacity<.001){lastTime=null;interaction.held=false;return;}
+    if(!ctx||opacity<.001){lastTime=null;interaction.held=false;earth?.hide();return;}
     const dt=lastTime===null?1/30:Math.max(0,Math.min(.05,time-lastTime));lastTime=time;interaction.update(dt,reduced);
     const t=reduced?0:interaction.flow;phase=clamp(p,0,2);const warm=smooth(phase-1),sphere=1-Math.abs(phase-1),narrow=w<900;
     unit=Math.min(w*(narrow?.42:.34),h*(narrow?.24:.37));cx=w*(narrow?.5:.70);cy=h*(narrow?.62:.51);
     if(Math.round(phase)!==lastStage){interaction.selected=-1;lastStage=Math.round(phase);}
+    const earthBlend=earth?.available?earthOpacity(phase):0;
     const pointer={x:((aim.x+1)*w/2-cx)/unit,y:(cy-(aim.y+1)*h/2)/unit};
     const project=q=>{const a=interactivePoint(q,phase,interaction,pointer);return {...a,sx:cx+a.x*unit,sy:cy-a.y*unit};};
     ctx.setTransform(ratio,0,0,ratio,0,0);ctx.globalAlpha=1;ctx.clearRect(0,0,w,h);ctx.fillStyle='#040c18';ctx.fillRect(0,0,w,h);starDust(ctx,w,h,t,stars,.7);
     const halo=ctx.createRadialGradient(cx,cy,unit*.12,cx,cy,unit*1.5);
     halo.addColorStop(0,`rgba(${24+warm*74},${100+warm*12},${150-warm*40},.24)`);halo.addColorStop(1,'rgba(4,12,24,0)');ctx.fillStyle=halo;ctx.fillRect(0,0,w,h);
+    if(earthBlend<.999){
     // The sphere is translucent and volumetric, without the old stacked sheets.
     if(sphere>.01){
       const body=ctx.createRadialGradient(cx-unit*.27,cy-unit*.25,unit*.12,cx,cy,unit*1.12);
@@ -93,10 +98,10 @@ export function createPrelude(canvas){
     }
     hits=[];
     if(sphere>.01){
-      const anchors=concepts.map((name,i)=>globePoint(dots[i*289+71],t));
-      const selected=interaction.selected<0?0:interaction.selected%8;
+      const anchors=CITIES.map(c=>{const p=geoPoint(c.lon,c.lat);const a=EARTH_YAW+t*EARTH_SPEED,cx=Math.cos(a),sx=Math.sin(a);return {x:p.x*cx+p.z*sx,y:p.y,z:-p.x*sx+p.z*cx};});
+      const selected=interaction.selected<0?0:interaction.selected%CITIES.length;
       for(let j=1;j<=3;j++){
-        const a=anchors[selected],b=anchors[(selected+j*2)%8];ctx.beginPath();
+        const a=anchors[selected],b=anchors[(selected+j*7)%CITIES.length];ctx.beginPath();
         for(let k=0;k<=48;k++){const u=k/48,x=mix(a.x,b.x,u),y=mix(a.y,b.y,u),z=mix(a.z,b.z,u),r=(1+Math.sin(u*Math.PI)*.22)/Math.max(.1,Math.hypot(x,y,z));const q=project({x:x*r,y:y*r,z:z*r});k?ctx.lineTo(q.sx,q.sy):ctx.moveTo(q.sx,q.sy);}
         ctx.strokeStyle=`rgba(124,228,244,${sphere*(interaction.selected<0?.22:.65)})`;ctx.lineWidth=1.2;ctx.stroke();
       }
@@ -116,14 +121,19 @@ export function createPrelude(canvas){
     const core=ctx.createRadialGradient(cx-r*.3,cy-r*.3,0,cx,cy,r);core.addColorStop(0,'#fffbea');core.addColorStop(.55,'#ffe8a2');core.addColorStop(1,'#d59a48');ctx.fillStyle=core;ctx.globalAlpha=.12+.88*warm+(reduced&&interaction.activated&&phase<.5?.4:0);ctx.beginPath();ctx.arc(cx,cy,r,0,TAU);ctx.fill();ctx.globalAlpha=1;
     if(warm>.5){ctx.strokeStyle='#ffe9a3';ctx.globalAlpha=warm*.28;for(let i=0;i<12;i++){const a=i/12*TAU+t*.08;ctx.beginPath();ctx.moveTo(cx+Math.cos(a)*r,cy+Math.sin(a)*r);ctx.lineTo(cx+Math.cos(a)*r*(1.1+.1*Math.sin(t+i)),cy+Math.sin(a)*r*(1.1+.1*Math.sin(t+i)));ctx.stroke();}ctx.globalAlpha=1;}
     if(!reduced)for(const pulse of interaction.pulses){ctx.beginPath();ctx.arc(cx+pulse.x*unit,cy-pulse.y*unit,Math.max(2,pulse.age*unit*1.5),0,TAU);ctx.strokeStyle=`rgba(167,238,255,${.65*(1-pulse.age/1.8)})`;ctx.lineWidth=1.1;ctx.stroke();}
+    }
+    if(earthBlend>0){
+      ctx.globalAlpha=earthBlend;ctx.fillStyle='#040c18';ctx.fillRect(0,0,w,h);ctx.globalAlpha=1;starDust(ctx,w,h,t,stars,earthBlend*.7);
+      const cityHits=earth.render({time:t,yaw:interaction.yaw,pitch:interaction.pitch,selected:Math.round(phase)===1?interaction.selected:-1,opacity:earthBlend,w,h,cx,cy:narrow?mix(cy,h*.59,earthBlend):cy,unit:mix(unit,Math.min(unit,w*(narrow?.35:.245),h*.34),earthBlend),reduced});if(Math.round(phase)===1)hits=cityHits;
+    }else earth?.hide();
     const scrim=ctx.createLinearGradient(0,0,w*.48,0);scrim.addColorStop(0,'rgba(4,12,24,.65)');scrim.addColorStop(1,'rgba(4,12,24,0)');ctx.fillStyle=scrim;ctx.fillRect(0,0,w,h);
-    canvas.dataset.art=['question-stream','knowledge-sphere','experiment-orbits'][Math.round(phase)];canvas.dataset.points=String(dots.length);canvas.dataset.morph=phase.toFixed(4);canvas.dataset.yaw=interaction.yaw.toFixed(3);canvas.dataset.selected=String(interaction.selected);canvas.dataset.actions=String(interaction.actions);canvas.dataset.pulses=String(interaction.pulses.length);
+    canvas.dataset.art=['question-stream','global-cities','experiment-orbits'][Math.round(phase)];canvas.dataset.points=String(dots.length);canvas.dataset.morph=phase.toFixed(4);canvas.dataset.yaw=interaction.yaw.toFixed(3);canvas.dataset.selected=String(interaction.selected);canvas.dataset.actions=String(interaction.actions);canvas.dataset.pulses=String(interaction.pulses.length);
   }
   function select(index){interaction.selected=index;interaction.actions++;}
-  function activate(){if(phase<.5)interaction.pulse(0,0);else {const list=hits.map(q=>q.index);select(list[(list.indexOf(interaction.selected)+1)%Math.max(1,list.length)]??0);}}
-  resize();return {render,resize,pointer(x,y){aim.x=clamp(x,-1,1);aim.y=clamp(y,-1,1);},over(value){interaction.over=value;},hold(value){interaction.held=value;},drag(dx,dy){interaction.drag(dx,dy);},activate,
-    tap(x,y){if(phase<.5)interaction.pulse((x-cx)/unit,(cy-y)/unit);else {const nearest=[...hits].sort((a,b)=>Math.hypot(a.x-x,a.y-y)-Math.hypot(b.x-x,b.y-y))[0];if(nearest)select(nearest.index);}},
+  function activate(){if(phase<.5)interaction.pulse(0,0);else {const list=[...new Set(hits.map(q=>q.index))];select(list[(list.indexOf(interaction.selected)+1)%Math.max(1,list.length)]??0);}}
+  resize();return {render,resize,attachGlobe(globe){earth=globe;},selectCity(index){if(!CITIES[index])return;select(index);const aim=cityFocus(CITIES[index],interaction.reduced?0:interaction.flow,interaction.yaw);interaction.targetYaw=aim.yaw;interaction.targetPitch=aim.pitch;},pointer(x,y){aim.x=clamp(x,-1,1);aim.y=clamp(y,-1,1);},over(value){interaction.over=value;},hold(value){interaction.held=value;},drag(dx,dy){interaction.drag(dx,dy);},activate,
+    tap(x,y){if(phase<.5)interaction.pulse((x-cx)/unit,(cy-y)/unit);else {const nearest=[...hits].sort((a,b)=>Math.hypot(a.x-x,a.y-y)-Math.hypot(b.x-x,b.y-y))[0];if(nearest&&(Math.round(phase)!==1||Math.hypot(nearest.x-x,nearest.y-y)<Math.max(26,unit*.12)))select(nearest.index);}},
     reset(){interaction.reset();},speed(){interaction.speed=interaction.speed===1?2.5:1;},
-    get info(){const stage=Math.round(phase),index=interaction.selected;return {stage,selected:index,speed:interaction.speed,help:['移动拨动光流 · 点击激发光波','拖动旋转星球 · 点击节点连接知识','拖动改变视角 · 点击行星探索实验'][stage],action:['激发光波','连接下个节点','选择下颗行星'][stage],selection:stage===0?(interaction.activated?'光流已点亮 · 再次点击继续探索':''):index<0?'':stage===1?concepts[index%8]+' · '+conceptNotes[index%8]:stage===2?experiments[index%6]+' · '+experimentNotes[index%6]:''};},
-    dispose(){dead=true;interaction.pulses=[];canvas.width=canvas.height=1;canvas.hidden=true;}};
+    get info(){const stage=Math.round(phase),index=interaction.selected;return {stage,selected:index,speed:interaction.speed,help:['移动拨动光流 · 点击激发光波','拖动旋转地球 · 点击城市查看位置','拖动改变视角 · 点击行星探索实验'][stage],action:['激发光波','探索下一城市','选择下颗行星'][stage],selection:stage===0?(interaction.activated?'光流已点亮 · 再次点击继续探索':''):index<0?(stage===1?'41 座城市 · 连线为探索示意':''):stage===1?CITIES[index%CITIES.length].name+' · '+CITIES[index%CITIES.length].en+' · '+Math.abs(CITIES[index%CITIES.length].lat).toFixed(1)+'°'+(CITIES[index%CITIES.length].lat<0?'S':'N')+' / '+Math.abs(CITIES[index%CITIES.length].lon).toFixed(1)+'°'+(CITIES[index%CITIES.length].lon<0?'W':'E'):stage===2?experiments[index%6]+' · '+experimentNotes[index%6]:''};},
+    dispose(){dead=true;earth?.dispose();interaction.pulses=[];canvas.width=canvas.height=1;canvas.hidden=true;}};
 }

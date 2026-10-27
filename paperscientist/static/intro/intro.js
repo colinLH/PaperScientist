@@ -1,6 +1,7 @@
 import {Journey} from './motion.mjs';
 import {Soundscape} from './audio.js?v=2';
-import {createPrelude,preludeOpacity} from './cosmic-art.mjs?v=3';
+import {createPrelude,preludeOpacity} from './cosmic-art.mjs?v=7';
+import {CITIES} from './earth-data.mjs';
 import {bindPreludeInput} from './prelude-interaction.mjs?v=2';
 import {LAST_STOP,chapterStops,journeyFrame} from './journey-map.mjs';
 import {createWarp} from './warp.js';
@@ -9,7 +10,7 @@ import {workSpring} from './work-layout.mjs?v=2';
 
 const chapters=[
   {name:'问题与线索',label:'从一个问题出发',title:'一个问题，\n点亮一条线索。',description:'从你的好奇心出发，让分散的信息成为可追寻的线索。'},
-  {name:'知识星球',label:'阅读，连接，追问',title:'让线索相连，\n看见新的方向。',description:'沿着刚才的线索连接文献，在知识之间找到值得追问的空白。'},
+  {name:'全球城市',label:'跨越城市，连接灵感',title:'让世界相连，\n看见新的方向。',description:'从北京到纽约，从伦敦到悉尼，让探索与全球的灵感相遇。'},
   {name:'轨道实验室',label:'让想法接受检验',title:'让方向成形，\n用实验去验证。',description:'把新的方向转化为假设、方法与实验，让证据回答最初的问题。'},
   {name:'星际穿梭',label:'穿过已知的边界',title:'向更远的\n问题出发。',description:'让好奇心，带你穿过这片星海。'},
   {name:'未知的星图',label:'在探索中保持方向',title:'让每一步探索，\n都有迹可循。',description:'你的判断、实验与发现，连成一张研究星图。'},
@@ -22,6 +23,9 @@ const reduced=matchMedia('(prefers-reduced-motion: reduce)'),journey=new Journey
 let scene=null,hands=null,frame=0,last=0,shown=0,dead=false,leaving=false,drawn=-1,resizeTimer=0,nextPaint=0,lastLandscapePaint=0;
 const prelude=createPrelude(document.querySelector('#prelude-canvas'));
 const interactionSurface=document.querySelector('#prelude-interaction'),interactionTools=document.querySelector('#prelude-tools');
+const cityPicker=document.querySelector('#earth-city');
+CITIES.forEach((c,i)=>{const option=document.createElement('option');option.value=i;option.textContent=c.name+' · '+c.en;cityPicker.append(option);});
+cityPicker.onchange=()=>{if(cityPicker.value!==''){prelude.selectCity(Number(cityPicker.value));wake();}};
 const preludeInput=bindPreludeInput(interactionSurface,prelude,wake);
 const interactionHelp=document.querySelector('#prelude-help'),interactionAction=document.querySelector('#prelude-action'),interactionSelection=document.querySelector('#prelude-selection'),interactionSpeed=document.querySelector('#prelude-speed');
 interactionAction.onclick=()=>{prelude.activate();wake();};document.querySelector('#prelude-reset').onclick=()=>{prelude.reset();wake();};interactionSpeed.onclick=()=>{prelude.speed();wake();};
@@ -41,7 +45,7 @@ function paint(now=performance.now(),dt=1/30){
   if(veil)veil.hidden=true;
   const opening=preludeOpacity(p);style(host,'visibility',p<3.3?'hidden':'visible');data(root,'prelude',String(p<2.5));prelude.render(p,now/1000,reduced.matches);
   const interactive=p<2.28&&!leaving;interactionSurface.hidden=interactionTools.hidden=!interactive;
-  if(!interactive)preludeInput.cancel();else{const info=prelude.info;for(const [el,text] of [[interactionHelp,info.help],[interactionAction,info.action],[interactionSelection,info.selection]])if(el.textContent!==text)el.textContent=text;interactionSpeed.hidden=info.stage!==2;interactionSpeed.setAttribute('aria-pressed',String(info.speed>1));interactionSpeed.textContent=info.speed>1?'恢复速度':'加速轨道';}
+  if(!interactive)preludeInput.cancel();else{const info=prelude.info;for(const [el,text] of [[interactionHelp,info.help],[interactionAction,info.action],[interactionSelection,info.selection]])if(el.textContent!==text)el.textContent=text;cityPicker.hidden=info.stage!==1;cityPicker.value=info.stage===1&&info.selected>=0?String(info.selected):'';interactionSpeed.hidden=info.stage!==2;interactionSpeed.setAttribute('aria-pressed',String(info.speed>1));interactionSpeed.textContent=info.speed>1?'恢复速度':'加速轨道';}
   if(scene){if(scene.setDetail(!journey.moving&&Math.abs(p-4)<.025))hands?.resize();if(p>=3.3&&Math.max(opening,state.warp,state.work)<.999&&(now-lastLandscapePaint>=32||!journey.moving)){scene.render(state.landscape,reduced.matches?0:now/1000);lastLandscapePaint=now;}}else style(host,'background',`radial-gradient(ellipse at 65% 40%,${['#789698','#80979b','#41576d','#162d48','#a19e9b','#e0c391'][Math.round(state.landscape)]},#142b3d 75%)`);
   hands?.setActive(Math.abs(p-4)<.45&&!credits.open&&!document.hidden&&!leaving);
   hands?.render(now/1000,state.star);
@@ -79,6 +83,7 @@ async function enter(e){if(e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.alt
 document.querySelectorAll('a[href="/?workspace=1"]').forEach(a=>a.addEventListener('click',enter));
 function dispose(){if(dead)return;dead=true;cancel();clearTimeout(resizeTimer);hands?.dispose();hands=null;preludeInput.dispose();prelude.dispose();warp.dispose();work.dispose();scene?.dispose();scene=null;audio.dispose();root.dataset.renderState='disposed';}
 window.addEventListener('pagehide',dispose);window.addEventListener('pageshow',e=>{if(e.persisted)location.reload();});
+import('./earth-globe.mjs?v=4').then(({createEarth})=>{if(!dead){try{prelude.attachGlobe(createEarth(document.querySelector('#earth-scene')));wake();}catch(error){console.warn('Earth: using projected city fallback',error.message);}}}).catch(error=>console.warn('Earth unavailable',error.message));
 controls();paint();audio.visibility(document.hidden);audio.arm();
 try{const {createScene}=await import('./scene.js?v=9');if(!dead){scene=createScene(host);paint();wake();}}catch(error){console.warn('Intro: using lightweight landscape',error.message);fallback();}
 if(scene&&!dead){try{const {createHands}=await import('./hands.js?v=4');if(!dead){hands=createHands({renderer:scene.renderer,panel:document.querySelector('#hand-camera'),button:document.querySelector('#hand-toggle'),wake});paint();wake();}}catch(error){console.warn('Hand controls unavailable',error.message);document.querySelector('#hand-toggle').textContent='手势暂不可用';}}

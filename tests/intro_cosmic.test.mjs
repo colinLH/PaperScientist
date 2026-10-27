@@ -29,6 +29,17 @@ test('star-map signals move along edges without reallocating geometry and stay s
  const still=Array.from(array);atlas.render(1,2);assert.deepEqual(Array.from(array),still);atlas.dispose();
 });
 
+test('city globe shares the prelude clock, preserves selection, stops hidden drawing and is disposed',()=>{
+ Object.assign(globalThis,{innerWidth:1280,innerHeight:720,devicePixelRatio:1});
+ const gradient={addColorStop(){}};const ctx=new Proxy({createLinearGradient:()=>gradient,createRadialGradient:()=>gradient},{get:(o,k)=>o[k]??(()=>{})});
+ const art=createPrelude({getContext:()=>ctx,style:{},dataset:{}});let frame,hidden=0,disposed=false;
+ art.attachGlobe({available:true,render(v){frame=v;return [{index:0,x:900,y:320,z:1}];},hide(){hidden++;},dispose(){disposed=true;}});
+ art.render(1,0);art.selectCity(20);art.render(1,1);assert.equal(frame.selected,20);assert.ok(frame.time>0);const before=frame.time;
+ art.render(1,2);assert.ok(frame.time>before);art.render(1,3,true);assert.equal(frame.time,0);assert.equal(frame.reduced,true);
+ frame=null;art.render(2,4);assert.equal(frame,null);assert.ok(hidden);art.render(6,5);assert.equal(frame,null);
+ art.dispose();assert.equal(disposed,true);
+});
+
 test('the same seeds morph continuously through both chapter boundaries and reverse exactly',()=>{
  const seeds=globeSeeds();
  for(const i of [0,99,220,999,2300])for(const boundary of [0,1,2]){
