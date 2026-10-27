@@ -1,5 +1,5 @@
 import {smooth} from './motion.mjs';
-import {railLayout,railCard,progressForCard,playingCards,portalBounds,cameraTile,workPixelRatio,workScrollRange} from './work-layout.mjs';
+import {railLayout,railCard,progressForCard,playingCards,portalBounds,cameraTile,workPixelRatio,workScrollRange} from './work-layout.mjs?v=2';
 import {makeGravitySeeds,drawPortalField,fieldStrength} from './gravity.mjs';
 import {papers,createPreviewPlayback} from './paper-previews.mjs';
 

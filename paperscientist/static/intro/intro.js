@@ -1,10 +1,11 @@
 import {Journey} from './motion.mjs';
 import {Soundscape} from './audio.js?v=2';
-import {createPrelude,preludeOpacity} from './cosmic-art.mjs';
+import {createPrelude,preludeOpacity} from './cosmic-art.mjs?v=3';
+import {bindPreludeInput} from './prelude-interaction.mjs?v=2';
 import {LAST_STOP,chapterStops,journeyFrame} from './journey-map.mjs';
 import {createWarp} from './warp.js';
-import {createWork} from './work.js';
-import {workSpring} from './work-layout.mjs';
+import {createWork} from './work.js?v=2';
+import {workSpring} from './work-layout.mjs?v=2';
 
 const chapters=[
   {name:'问题与线索',label:'从一个问题出发',title:'一个问题，\n点亮一条线索。',description:'从你的好奇心出发，让分散的信息成为可追寻的线索。'},
@@ -13,13 +14,17 @@ const chapters=[
   {name:'星际穿梭',label:'穿过已知的边界',title:'向更远的\n问题出发。',description:'让好奇心，带你穿过这片星海。'},
   {name:'未知的星图',label:'在探索中保持方向',title:'让每一步探索，\n都有迹可循。',description:'你的判断、实验与发现，连成一张研究星图。'},
   {name:'研究作品',label:'从探索到表达',title:'让发现，\n成为作品。',description:'文献、方法、实验与表达，在这里相遇。'},
-  {name:'研究港湾',label:'下一段旅程，属于你',title:'带上你的问题，\n从这里启航。',description:'让文献、实验与表达在这里汇合，与 PaperScientist 开始你的研究。'}
+  {name:'新的地平线',label:'PaperScientist',title:'接下来，\n是你的发现。',description:'带上一个问题，与科研伙伴一起出发。'}
 ];
 const root=document.querySelector('#journey'),host=document.querySelector('#landscape'),copy=document.querySelector('#copy'),nav=document.querySelector('#chapters'),veil=document.querySelector('#valley-mist');
 const previous=document.querySelector('#previous'),next=document.querySelector('#next'),start=document.querySelector('#start'),credits=document.querySelector('#credits');
 const reduced=matchMedia('(prefers-reduced-motion: reduce)'),journey=new Journey(LAST_STOP),audio=new Soundscape(document.querySelector('#sound'),document.querySelector('#sound-status'));
 let scene=null,hands=null,frame=0,last=0,shown=0,dead=false,leaving=false,drawn=-1,resizeTimer=0,nextPaint=0,lastLandscapePaint=0;
 const prelude=createPrelude(document.querySelector('#prelude-canvas'));
+const interactionSurface=document.querySelector('#prelude-interaction'),interactionTools=document.querySelector('#prelude-tools');
+const preludeInput=bindPreludeInput(interactionSurface,prelude,wake);
+const interactionHelp=document.querySelector('#prelude-help'),interactionAction=document.querySelector('#prelude-action'),interactionSelection=document.querySelector('#prelude-selection'),interactionSpeed=document.querySelector('#prelude-speed');
+interactionAction.onclick=()=>{prelude.activate();wake();};document.querySelector('#prelude-reset').onclick=()=>{prelude.reset();wake();};interactionSpeed.onclick=()=>{prelude.speed();wake();};
 const warp=createWarp(document.querySelector('#warp-canvas')),work=createWork(document.querySelector('#work-scene'),wake,go),warpControls=document.querySelector('#warp-controls');
 warpControls.querySelectorAll('button').forEach((b,i)=>b.onclick=()=>{warp.speed(i+1);warpControls.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));wake();});
 const buttons=chapters.map((c,i)=>{const b=document.createElement('button');b.setAttribute('aria-label',`${i+1} · ${c.name}`);b.title=c.name;b.addEventListener('click',e=>go(chapterStops[i],e.detail===0));nav.append(b);return b;});
@@ -34,7 +39,9 @@ function paint(now=performance.now(),dt=1/30){
   data(root,'scene',String([0,1,2,'warp',3,'work',5][state.chapter]));data(root,'immersive',String(state.warp>.5||state.work>.5));data(root,'work',String(state.work>.5));data(root,'warp',String(state.warp>.5));
   data(root,'position',p.toFixed(5));data(root,'moving',String(journey.moving));
   if(veil)veil.hidden=true;
-  const opening=preludeOpacity(p);style(host,'visibility',p<3.3?'hidden':'visible');data(root,'prelude',String(p<2.5));data(root,'finale',String(p>9.6));prelude.render(p,now/1000,reduced.matches);
+  const opening=preludeOpacity(p);style(host,'visibility',p<3.3?'hidden':'visible');data(root,'prelude',String(p<2.5));prelude.render(p,now/1000,reduced.matches);
+  const interactive=p<2.28&&!leaving;interactionSurface.hidden=interactionTools.hidden=!interactive;
+  if(!interactive)preludeInput.cancel();else{const info=prelude.info;for(const [el,text] of [[interactionHelp,info.help],[interactionAction,info.action],[interactionSelection,info.selection]])if(el.textContent!==text)el.textContent=text;interactionSpeed.hidden=info.stage!==2;interactionSpeed.setAttribute('aria-pressed',String(info.speed>1));interactionSpeed.textContent=info.speed>1?'恢复速度':'加速轨道';}
   if(scene){if(scene.setDetail(!journey.moving&&Math.abs(p-4)<.025))hands?.resize();if(p>=3.3&&Math.max(opening,state.warp,state.work)<.999&&(now-lastLandscapePaint>=32||!journey.moving)){scene.render(state.landscape,reduced.matches?0:now/1000);lastLandscapePaint=now;}}else style(host,'background',`radial-gradient(ellipse at 65% 40%,${['#789698','#80979b','#41576d','#162d48','#a19e9b','#e0c391'][Math.round(state.landscape)]},#142b3d 75%)`);
   hands?.setActive(Math.abs(p-4)<.45&&!credits.open&&!document.hidden&&!leaving);
   hands?.render(now/1000,state.star);
@@ -61,8 +68,8 @@ root.addEventListener('touchcancel',()=>{touchY=null;},{passive:true});
 root.addEventListener('pointerdown',e=>{if(!audio.armed&&!e.target.closest('#sound,a,#credits-open'))audio.arm();},{passive:true});
 root.addEventListener('touchend',()=>audio.arm(),{passive:true});
 document.addEventListener('keydown',e=>{if(!credits.open&&!e.repeat&&!e.target.closest('#sound,a,#credits-open'))audio.arm();});
-document.querySelector('#credits-open').onclick=()=>{cancel();credits.showModal();audio.visibility(true);hands?.setActive(false);work.pause(true);};credits.addEventListener('close',()=>{audio.visibility(document.hidden);work.pause(document.hidden);wake();});
-document.addEventListener('visibilitychange',()=>{audio.visibility(document.hidden);hands?.visibility(document.hidden);work.pause(document.hidden);if(document.hidden){cancel();root.dataset.renderState='hidden';}else wake();});
+document.querySelector('#credits-open').onclick=()=>{cancel();credits.showModal();audio.visibility(true);hands?.setActive(false);preludeInput.cancel();work.pause(true);};credits.addEventListener('close',()=>{audio.visibility(document.hidden);work.pause(document.hidden);wake();});
+document.addEventListener('visibilitychange',()=>{audio.visibility(document.hidden);hands?.visibility(document.hidden);work.pause(document.hidden);if(document.hidden){preludeInput.cancel();cancel();root.dataset.renderState='hidden';}else wake();});
 reduced.addEventListener('change',()=>go(journey.target,true));
 window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{scene?.resize();hands?.resize();prelude.resize();warp.resize();work.resize();wake();},120);});
 function fallback(){hands?.dispose();hands=null;scene?.dispose();scene=null;document.querySelector('#fallback').hidden=false;wake();}
@@ -70,7 +77,7 @@ host.addEventListener('scene-lost',fallback);
 host.addEventListener('scene-ready',wake);
 async function enter(e){if(e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;e.preventDefault();if(leaving)return;leaving=true;audio.fadeOut();root.animate([{opacity:1},{opacity:0}],{duration:reduced.matches?180:800,easing:'ease-out',fill:'forwards'});setTimeout(()=>{dispose();location.assign(e.currentTarget?.href||'/?workspace=1');},reduced.matches?200:1000);}
 document.querySelectorAll('a[href="/?workspace=1"]').forEach(a=>a.addEventListener('click',enter));
-function dispose(){if(dead)return;dead=true;cancel();clearTimeout(resizeTimer);hands?.dispose();hands=null;prelude.dispose();warp.dispose();work.dispose();scene?.dispose();scene=null;audio.dispose();root.dataset.renderState='disposed';}
+function dispose(){if(dead)return;dead=true;cancel();clearTimeout(resizeTimer);hands?.dispose();hands=null;preludeInput.dispose();prelude.dispose();warp.dispose();work.dispose();scene?.dispose();scene=null;audio.dispose();root.dataset.renderState='disposed';}
 window.addEventListener('pagehide',dispose);window.addEventListener('pageshow',e=>{if(e.persisted)location.reload();});
 controls();paint();audio.visibility(document.hidden);audio.arm();
 try{const {createScene}=await import('./scene.js?v=9');if(!dead){scene=createScene(host);paint();wake();}}catch(error){console.warn('Intro: using lightweight landscape',error.message);fallback();}

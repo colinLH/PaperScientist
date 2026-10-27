@@ -26,14 +26,14 @@ test('at most two curtains including partial edges, disjoint alternating rails a
  }
 });
 
-test('the opened wall starts empty and curtains enter from the right only at the preceding opposite-rail exit',()=>{
+test('the opened wall starts empty and curtains enter from the right only at the preceding card reaches the half-screen handoff',()=>{
  for(const [w,h] of [[390,844],[1280,720],[3840,2160]]){
   const layout=railLayout(w,h);
   for(let p=0;p<CURTAIN_START;p+=.01)for(let i=0;i<CURTAIN_COUNT;i++)assert.equal(railCard(i,p,layout).visible,false);
   for(let i=0;i<CURTAIN_COUNT;i++){
    const entry=entryForCard(i,layout),incoming=railCard(i,entry+1e-7,layout);
    assert.ok(incoming.visible&&incoming.x>w-1,'enters at right edge');
-   if(i){const outgoing=railCard(i-1,entry,layout);assert.notEqual(incoming.row,outgoing.row);assert.ok(outgoing.visible);assert.ok(Math.abs(outgoing.x+outgoing.width-w/3)<1e-6);}
+   if(i){const outgoing=railCard(i-1,entry,layout);assert.notEqual(incoming.row,outgoing.row);assert.ok(outgoing.visible);assert.ok(Math.abs(outgoing.x+outgoing.width-w/2)<1e-6);}
   }
   for(const p of [CURTAIN_END+.001,1])for(let i=0;i<CURTAIN_COUNT;i++)assert.equal(railCard(i,p,layout).visible,false);
  }

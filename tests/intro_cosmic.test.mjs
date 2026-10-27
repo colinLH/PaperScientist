@@ -16,8 +16,8 @@ test('new opening stops hidden drawing, reduces motion deterministically, and re
  let calls=[];const ctx={globalAlpha:1,save(){},restore(){},createLinearGradient(){return {addColorStop(){}};},createRadialGradient(){return {addColorStop(){}};}};
  for(const key of ['clearRect','strokeRect','bezierCurveTo','setTransform','fillRect','beginPath','moveTo','lineTo','closePath','fill','stroke','arc','ellipse','translate','rotate','clip'])ctx[key]=(...args)=>{assert.ok(args.every(Number.isFinite));calls.push([key,...args]);};
  const canvas={getContext:()=>ctx,style:{},dataset:{}};const art=createPrelude(canvas);
- for(const p of [0,.5,1,1.5,2,9.5,10]){calls=[];art.render(p,0,true);assert.ok(calls.length>100);const first=JSON.stringify(calls);calls=[];art.render(p,30,true);assert.equal(JSON.stringify(calls),first);}
- calls=[];art.render(4,30);assert.equal(calls.length,0);assert.equal(canvas.hidden,true);
+ for(const p of [0,.5,1,1.5,2]){calls=[];art.render(p,0,true);assert.ok(calls.length>100);const first=JSON.stringify(calls);calls=[];art.render(p,30,true);assert.equal(JSON.stringify(calls),first);}
+ for(const p of [4,9.5,10]){calls=[];art.render(p,30);assert.equal(calls.length,0);assert.equal(canvas.hidden,true);}
  art.dispose();assert.equal(canvas.width*canvas.height,1);
 });
 
