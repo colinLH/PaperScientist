@@ -4,7 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#172c36"><title>PaperScientist · 向未知出发</title>
   <link rel="stylesheet" href="/intro-assets/intro.css?v=7">
-  <link rel="stylesheet" href="/intro-assets/immersive.css?v=6">
+  <link rel="stylesheet" href="/intro-assets/immersive.css?v=8">
 </head>
 <body>
   <main id="journey" aria-label="PaperScientist 交互开场" data-scene="0">
@@ -12,8 +12,9 @@
     <div id="valley-mist" aria-hidden="true"><span></span><span></span></div>
     <canvas id="prelude-canvas" aria-hidden="true"></canvas>
     <div id="earth-scene" aria-hidden="true" hidden></div>
-    <div id="prelude-interaction" role="group" aria-label="互动星空：左右键旋转，回车激发或选择，Escape 重置" aria-describedby="prelude-help" tabindex="0"></div>
-    <div id="prelude-tools"><p id="prelude-help">移动拨动光流 · 点击激发光波</p><div><button id="prelude-action" type="button">激发光波</button><select id="earth-city" aria-label="选择全球城市" hidden><option value="">选择城市</option></select><button id="prelude-speed" type="button" aria-pressed="false" hidden>加速轨道</button><button id="prelude-reset" type="button">重置视角</button></div><p id="prelude-selection" role="status" aria-live="polite"></p></div>
+    <div id="research-sculpture" aria-hidden="true" hidden></div>
+    <div id="prelude-interaction" role="group" aria-label="研究装置：左右键旋转，回车激发或选择，Escape 重置" aria-describedby="prelude-help" tabindex="0"></div>
+    <div id="prelude-tools"><p id="prelude-help">拖动观察光带 · 点击让线索流动</p><div><button id="prelude-action" type="button">点亮线索</button><select id="earth-city" aria-label="选择全球城市" hidden><option value="">选择城市</option></select><button id="prelude-speed" type="button" aria-pressed="false" hidden>加速轨道</button><button id="prelude-reset" type="button">重置视角</button></div><p id="prelude-selection" role="status" aria-live="polite"></p></div>
     <canvas id="warp-canvas" aria-hidden="true" hidden></canvas>
     <div id="warp-controls" role="group" aria-label="穿梭速度" hidden><span>速度</span><button aria-pressed="false">1</button><button aria-pressed="false">2</button><button aria-pressed="true">3</button><button aria-pressed="false">4</button><button aria-pressed="false">5</button></div>
     <section id="work-scene" aria-label="研究作品展示" hidden>
@@ -24,8 +25,8 @@
       <div class="header-actions"><button id="hand-toggle" type="button" aria-pressed="false">开启手势</button><button id="sound" type="button" aria-pressed="true">♫ <span>声音已开启</span></button><button id="credits-open" type="button" aria-label="音乐版权信息" title="音乐版权信息">ⓘ</button><a class="enter-link" href="/?workspace=1">跳过开场 ↗</a></div>
     </header>
     <div id="copy" aria-live="polite" aria-atomic="true">
-      <p id="chapter">向未知出发</p><h1 id="title">一个问题，<br>点亮一条线索。</h1>
-      <p id="description">从你的好奇心出发，让分散的信息成为可追寻的线索。</p>
+      <p id="chapter">向未知出发</p><h1 id="title">好奇心，<br>值得被认真对待。</h1>
+      <p id="description">从一个尚未回答的问题开始。让散落的线索，逐渐显露方向。</p>
       <a id="start" href="/?workspace=1" hidden><span>Start</span><small>开始我的研究</small><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16m-6-6 6 6-6 6"/></svg></a>
     </div>
     <nav id="chapters" aria-label="开场章节"></nav>
@@ -44,5 +45,5 @@
     <p>Released under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> · <a href="https://www.scottbuckley.com.au" target="_blank" rel="noopener">www.scottbuckley.com.au</a>。原曲未裁剪；播放时调整音量与交叉淡化。</p>
   </dialog>
   <noscript><style>#copy{opacity:1}#start{display:flex!important}#landscape{background:linear-gradient(#596f7a,#192b39)}</style><p class="noscript">启用 JavaScript 可体验镜头漫游，或<a href="/?workspace=1">直接进入工作台</a>。</p></noscript>
-  <script type="module" src="/intro-assets/intro.js?v=20"></script>
+  <script type="module" src="/intro-assets/intro.js?v=22"></script>
 </body></html>
