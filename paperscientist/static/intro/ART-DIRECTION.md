@@ -1,5 +1,11 @@
 # A question becomes a journey
 
+## Leaves meeting water and shallow goldfish — 2026-10-28
+
+Chapter three gains a small living pond without changing the garden composition. Some of the existing falling leaves now descend to fixed positions in the painted water, produce three softly expanding elliptical rings at contact, flatten onto the surface, drift briefly and fade. Leaf contact and ring origins share artwork coordinates, so portrait crops and resize cannot separate them. A deterministic 48-second schedule replaces event accumulation; no ripple from before the first visit is replayed. Other leaves continue drifting through the air. The final chapter retains its existing petal behavior.
+
+Six small goldfish (four on narrow screens) swim in smooth looping paths within a conservative water mask that excludes bridge piers and bank rocks. Translucent double tails, pectoral fins, warm bodies, restrained shadows and cool surface highlights convey shallow water. Glints render over the fish. Tail motion and heading follow the shared scene time; the pond advances only while chapter three is visible and respects its speed control. Reduced motion fixes the fish and suppresses falling leaves and impact rings. All effects share the existing capped canvas: no extra image assets, textures, WebGL context, timer or animation loop. The purpose is delight in the occasional welcome scene. Browser feel checks cover the visibility of the fish against the painted reflections and the contact-to-ripple timing; no device-level performance claim is made.
+
 ## Tilted turntables and a living closing landscape — 2026-10-28
 
 The newest request positions the first disc's centre at the gallery's left boundary, exposing about half its circular face. The following discs advance toward the right while the final visual gap remains the largest. Each print rotates within its own plane at three degrees per second (one revolution in two minutes). The outer transform owns perspective, pointer tilt and placement; the inner transform owns spindle rotation, so dragging the viewing angle cannot change the rotation axis. Reduced motion fixes the spindle. The central image is the user's newly supplied pink water-town painting, enhanced directly to 3840×2160 with its source marks retained.

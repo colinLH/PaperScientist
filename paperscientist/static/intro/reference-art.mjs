@@ -1,5 +1,6 @@
 import {clamp,smooth} from './motion.mjs';
-import {createGardenAtmosphere,createGardenCanopy} from './garden-atmosphere.mjs?v=3';
+import {createGardenAtmosphere,createGardenCanopy} from './garden-atmosphere.mjs?v=4';
+import {createGardenPond,pondLeafPose} from './garden-pond.mjs';
 
 export const referenceOpacity=p=>p<1?1-smooth((p-.12)/.65):smooth((p-1.18)/.66)*(1-smooth((p-2.28)/.5));
 export const records=[
@@ -35,8 +36,8 @@ export function createReferenceArt(host,wake){
     <div class="disc-field"></div><div class="disc-editorial"><p><small>阅读与关联</small>“沿着线索，<br>发现新的联系。”</p><p><small>提问与判断</small>“让值得追问的问题，<br>成为研究的起点。”</p></div>
   </section><section class="garden-scene" aria-label="山水研究庭院" hidden><div class="garden-plate"><img src="/intro-assets/textures/garden-reference-4k.webp" alt="红色古塔与庭院、拱桥、秋色树林和山间溪水的绘画"/><div class="garden-canopy" aria-hidden="true"></div><canvas aria-hidden="true"></canvas></div></section>`;
   const gallery=host.querySelector('.disc-gallery'),field=host.querySelector('.disc-field'),garden=host.querySelector('.garden-scene'),plate=host.querySelector('.garden-plate'),img=plate.querySelector('img'),canvas=plate.querySelector('canvas'),ctx=canvas.getContext('2d',{alpha:true});
-  const atmosphere=createGardenAtmosphere(),canopy=createGardenCanopy(plate.querySelector('.garden-canopy'),img),name=host.querySelector('[data-record-name]'),note=host.querySelector('[data-record-note]'),ripples=new WaterRipples(),abort=new AbortController();
-  let dead=false,stage=0,selected=2,w=1,h=1,lastTime=null,lastRatio='',frames=0,waterFeedback=false;
+  const pond=createGardenPond(),atmosphere=createGardenAtmosphere({leafPose:pondLeafPose}),canopy=createGardenCanopy(plate.querySelector('.garden-canopy'),img),name=host.querySelector('[data-record-name]'),note=host.querySelector('[data-record-note]'),ripples=new WaterRipples(),abort=new AbortController();
+  let dead=false,stage=0,selected=2,w=1,h=1,lastTime=null,lastRatio='',frames=0,waterFeedback=false,pondTime=0;
   const discs=records.map((record,index)=>{
     const button=document.createElement('button');button.className='research-disc';button.dataset.print=record.style;button.setAttribute('aria-label','选择'+record.name+'唱片');button.setAttribute('aria-pressed',String(index===selected));
     button.innerHTML=`<span class="disc-print" style="background-image:url('/intro-assets/textures/${record.image}')"><span class="disc-label">${record.title.replace('\n','<br>')}</span><span class="disc-edition">PaperScientist / ${record.name}</span></span><span class="disc-hub"></span>`;
@@ -58,6 +59,7 @@ export function createReferenceArt(host,wake){
         const fw=w*.90,fh=h*.78;
         discs.forEach((disc,i)=>{const v=discLayout(fw,fh,i,state.yaw,t,reduced),transform=discTransforms({...v,central:i===2},state,aim,t,reduced);if(disc.style.width!==v.d+'px')disc.style.width=disc.style.height=v.d+'px';disc.style.transform=transform.plane;prints[i].style.transform=transform.spindle;});
       }else{
+        if(!reduced)pondTime+=dt;const gardenTime=reduced?0:pondTime;
         const ratio=Math.min(devicePixelRatio||1,1.5,Math.sqrt(1400000/(w*h))),key=w+':'+h+':'+ratio;
         if(key!==lastRatio){lastRatio=key;canvas.width=Math.round(w*ratio);canvas.height=Math.round(h*ratio);}
         const dx=reduced?0:aim.x*5+clamp(state.yaw,-1,1)*6,dy=reduced?0:aim.y*3;
@@ -69,12 +71,14 @@ export function createReferenceArt(host,wake){
             const crop=imageCover(img.naturalWidth,img.naturalHeight,w,h,w<=700?.62:.5);
             canopy.render(crop,w,h,t,reduced);
             airCrop={x:crop.x/img.naturalWidth,y:crop.y/img.naturalHeight,w:crop.w/img.naturalWidth,h:crop.h/img.naturalHeight};
+            host.dataset.fish=String(pond.fish(ctx,w,h,gardenTime,reduced,airCrop));
             // Preserve native 4K detail: only light glints overlay the water,
             // never repaint the photograph through the lower-resolution FX canvas.
-            ctx.globalAlpha=1;atmosphere.shimmer(ctx,crop,w,h,t,reduced,img.naturalWidth,img.naturalHeight);
+            ctx.globalAlpha=1;atmosphere.shimmer(ctx,crop,w,h,gardenTime,reduced,img.naturalWidth,img.naturalHeight);
+            host.dataset.leafRipples=String(pond.surface(ctx,w,h,gardenTime,reduced,airCrop));host.dataset.pondTime=gardenTime.toFixed(3);
           }
           ctx.globalAlpha=1;for(const r of ripples.items)for(let i=0;i<3;i++){const radius=(r.age*50+i*16);ctx.beginPath();ctx.ellipse(r.x*w,r.y*h,radius,radius*.22,0,0,Math.PI*2);ctx.strokeStyle=`rgba(253,250,226,${(1-r.age/2.5)*.38})`;ctx.lineWidth=1;ctx.stroke();}
-          atmosphere.air(ctx,w,h,t,reduced,airCrop);
+          atmosphere.air(ctx,w,h,gardenTime,reduced,airCrop);
         }
       }
       frames++;host.dataset.frames=String(frames);host.dataset.selected=String(selected);host.dataset.ripples=String(ripples.items.length);host.dataset.motion=t.toFixed(3);host.dataset.yaw=state.yaw.toFixed(3);return [];
@@ -83,6 +87,6 @@ export function createReferenceArt(host,wake){
     activate(){if(stage===0)choose((selected+1)%records.length);else water();},
     reset(){choose(2);ripples.items=[];waterFeedback=false;},
     get info(){return stage===0?{help:'拖动唱片集 · 点击切换研究线索',action:'浏览下一张',selection:records[selected].line}:{help:'移动欣赏园林 · 点击水面泛起涟漪',action:'轻点水面',selection:waterFeedback?'涟漪渐息，让想法慢慢沉淀。':''};},
-    dispose(){dead=true;abort.abort();ripples.items=[];atmosphere.dispose();canopy.dispose();img.removeAttribute('src');canvas.width=canvas.height=1;host.replaceChildren();host.hidden=true;}
+    dispose(){dead=true;abort.abort();ripples.items=[];pond.dispose();atmosphere.dispose();canopy.dispose();img.removeAttribute('src');canvas.width=canvas.height=1;host.replaceChildren();host.hidden=true;}
   };
 }

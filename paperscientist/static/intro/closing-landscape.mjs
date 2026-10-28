@@ -1,6 +1,6 @@
 import {clamp,smooth} from './motion.mjs';
-import {imageCover,WaterRipples} from './reference-art.mjs?v=4';
-import {createGardenAtmosphere,createGardenCanopy,canopyPose} from './garden-atmosphere.mjs?v=3';
+import {imageCover,WaterRipples} from './reference-art.mjs?v=5';
+import {createGardenAtmosphere,createGardenCanopy,canopyPose} from './garden-atmosphere.mjs?v=4';
 
 export const closingOpacity=p=>smooth((p-9.25)/.72);
 export const closingWaterSpan=y=>({left:.17-(y-.8)*.17,right:.86+(y-.8)*.1});

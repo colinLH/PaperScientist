@@ -49,7 +49,7 @@ export function createGardenCanopy(host,img,options={}){
 
 // One small cached mist texture; no full-image repaint or additional clock.
 export function createGardenAtmosphere(options={}){
-  const mistPose=options.fogPose||fogPose,spanAt=options.waterSpan||waterSpan,colors=options.leafColors||leafColors,start=options.waterStart??.735,mistCount=options.fogCount??FOG_BUDGET;
+  const mistPose=options.fogPose||fogPose,leafAt=options.leafPose||leafPose,spanAt=options.waterSpan||waterSpan,colors=options.leafColors||leafColors,start=options.waterStart??.735,mistCount=options.fogCount??FOG_BUDGET;
   const fog=document.createElement('canvas');fog.width=320;fog.height=128;
   const f=fog.getContext('2d');
   if(f)for(let i=0;i<22;i++){
@@ -74,7 +74,7 @@ export function createGardenAtmosphere(options={}){
     const sw=w/crop.w,sh=h/crop.h;
     ctx.save();for(let i=0;i<mistCount;i++){const p=mistPose(i,time,sw,sh,reduced);ctx.globalAlpha=p.alpha;ctx.drawImage(fog,p.x-crop.x*sw-p.width/2,p.y-crop.y*sh-p.height/2,p.width,p.height);}
     if(!reduced)for(let i=0;i<(w<700?10:LEAF_BUDGET);i++){
-      const p=leafPose(i,time,w,h);ctx.save();ctx.globalAlpha=p.alpha;ctx.translate(p.x,p.y);ctx.rotate(p.angle);ctx.scale(p.scale*p.flutter,p.scale);
+      const p=leafAt(i,time,w,h,reduced,crop);ctx.save();ctx.globalAlpha=p.alpha;ctx.translate(p.x,p.y);ctx.rotate(p.angle);ctx.scale(p.scale*p.flutter,p.scale*(p.flatten??1));
       ctx.fillStyle=colors[i%colors.length];ctx.beginPath();ctx.moveTo(-1,0);ctx.bezierCurveTo(-.35,-.8,.6,-.65,1.2,0);ctx.bezierCurveTo(.5,.62,-.4,.65,-1,0);ctx.fill();
       ctx.strokeStyle='#563c2477';ctx.lineWidth=.12;ctx.beginPath();ctx.moveTo(-1.2,0);ctx.quadraticCurveTo(0,.07,1.1,0);ctx.stroke();ctx.restore();
     }ctx.restore();
