@@ -1,5 +1,5 @@
 import {clamp} from './motion.mjs';
-import {papers} from './paper-previews.mjs';
+import {papers} from './paper-previews.mjs?v=2';
 
 export const WORK_RANGE={start:6,end:8,step:.02};
 export const CURTAIN_START=.04,CURTAIN_END=.96,CURTAIN_COUNT=papers.length;
@@ -25,13 +25,16 @@ export function portalBounds(width,height,camera){
 }
 export function workSpring(value,target){return value>4.95&&value<6||value>8&&value<9.05||target===5||target===9?6:11;}
 export function railLayout(width,height){
-  const top=clamp(height*.15,80,144),bottom=clamp(height*.2,132,180),gapY=clamp(height*.05,22,62);
-  const cardHeight=Math.max(70,(height-top-bottom-gapY)/2);
-  const cardWidth=Math.min(width*(width<700?.76:.36),cardHeight*1.82,560);
-  // The opposite rail enters with one half of a viewport still to travel.
-  // Two handoffs exceed a full crossing, so a rail cannot overlap itself.
-  const handoff=width/2+cardWidth,travel=(CURTAIN_COUNT-1)*handoff+width+cardWidth;
-  return {width,height,top,gapY,cardWidth,cardHeight,handoff,travel};
+  const marginTop=clamp(height*.15,80,144),bottom=clamp(height*.2,132,180),laneGap=clamp(height*.05,22,62);
+  const laneHeight=Math.max(70,(height-marginTop-bottom-laneGap)/2);
+  const cardWidth=Math.min(width*(width<700?.76:.36),laneHeight*1.82,Math.max(560,width*.26));
+  const cardHeight=width<700?laneHeight:Math.min(laneHeight,cardWidth/1.5);
+  const top=marginTop+(laneHeight-cardHeight)/2,gapY=laneGap+laneHeight-cardHeight;
+  // Four substantial staggered cards, plus an entering/exiting edge sliver.
+  // Same-rail spacing remains greater than cardWidth, including partial edges.
+  const capacity=width<700?2:5;
+  const handoff=(width+cardWidth)/capacity,travel=(CURTAIN_COUNT-1)*handoff+width+cardWidth;
+  return {width,height,top,gapY,cardWidth,cardHeight,handoff,travel,capacity};
 }
 export const columnPitch=width=>width*.71*(width<700?.24:.105);
 export function workDistance(progress,layout){return (clamp(progress,0,1)-CURTAIN_START)/(CURTAIN_END-CURTAIN_START)*layout.travel;}
@@ -44,7 +47,7 @@ export function railCard(index,progress,layout){
   const row=(index+1)%2,distance=workDistance(progress,layout);
   const x=width+index*handoff-distance;
   const y=top+row*(cardHeight+gapY);
-  return {index,row,x,y,width:cardWidth,height:cardHeight,visible:x+cardWidth>0&&x<width};
+  return {index,row,x,y,width:cardWidth,height:cardHeight,visible:x+cardWidth>1e-7&&x<width-1e-7};
 }
 export function progressForCard(index,layout){
   const distance=index*layout.handoff+(layout.width+layout.cardWidth)/2;

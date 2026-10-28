@@ -51,9 +51,14 @@
 @media(max-width:900px){#journey[data-prelude=true] #copy{left:8%;top:20%;width:82%}#journey[data-prelude=true] h1{font-size:clamp(32px,7vw,46px)}#journey[data-prelude=true] #description{font-size:14px;margin-top:20px;max-width:23em}}
 @media(max-height:540px) and (min-width:701px){#journey[data-prelude=true] #copy{top:26%}#journey[data-prelude=true] h1{font-size:36px}}
 
-/* Twelve accessible previews; two compact rows on phones. */
-.work-picker{display:grid;grid-template-columns:repeat(12,28px);gap:4px}.work-picker button{width:28px}
-@media(max-width:700px){.work-picker{grid-template-columns:repeat(6,23px);gap:3px}.work-picker button{width:23px}.work-guidance{bottom:66px}.work-caption{margin-bottom:5px}}
+/* Keep 36 destinations searchable without a wall of tiny numbered buttons. */
+.work-picker{display:flex;gap:5px;align-items:center;min-width:0}
+.work-picker select{width:clamp(150px,23vw,270px);max-width:100%;height:30px;padding:0 8px;border:1px solid #ed003d88;border-radius:0;background:#080406;color:#ffe9ee;font-family:inherit;font-size:11px;text-overflow:ellipsis;cursor:pointer;color-scheme:dark}
+.work-picker button{width:30px;height:30px;flex:none;font-size:15px}
+.work-picker button:disabled{opacity:.3;cursor:default}
+.work-picker :focus-visible{outline:2px solid #ffe9ee;outline-offset:3px}
+.work-preview[hidden]{display:none}
+@media(max-width:700px){.work-picker{gap:3px}.work-picker select{width:150px;height:28px;font-size:10px}.work-picker button{width:24px;height:28px}.work-guidance{bottom:66px}.work-caption{margin-bottom:5px}}
 /* A dedicated artwork surface keeps navigation and reading areas untouched. */
 #prelude-interaction{position:absolute;left:43%;right:6%;top:14%;bottom:20%;z-index:2;cursor:grab;touch-action:none;outline:none;border-radius:50%}
 #prelude-interaction:active{cursor:grabbing}#prelude-interaction:focus-visible{outline:1px dashed #9edce677;outline-offset:6px}

@@ -1,7 +1,7 @@
 import {smooth} from './motion.mjs';
-import {railLayout,railCard,progressForCard,playingCards,portalBounds,cameraTile,workPixelRatio,workScrollRange} from './work-layout.mjs?v=2';
+import {railLayout,railCard,progressForCard,playingCards,portalBounds,cameraTile,workPixelRatio,workScrollRange} from './work-layout.mjs?v=3';
 import {makeGravitySeeds,drawPortalField,fieldStrength} from './gravity.mjs';
-import {papers,createPreviewPlayback} from './paper-previews.mjs';
+import {papers,createPreviewPlayback,createPreviewPosters} from './paper-previews.mjs?v=2';
 
 const outlines=[
  'M2 0H16L21 58 28 0H43L51 58 56 0H70L60 94H44L36 40 28 94H12Z',
@@ -24,14 +24,25 @@ export function createWork(root,wake,navigate=()=>{}){
     const element=document.createElement('a');element.className='work-preview';element.href=paper.url;element.target='_blank';element.rel='noopener noreferrer';element.setAttribute('aria-label',`打开 ${paper.name} 论文项目页`);element.dataset.index=String(index);
     const bar=document.createElement('div');bar.className='paper-browser';const dots=document.createElement('span');dots.textContent='● ● ●';const address=document.createElement('span');address.textContent=new URL(paper.url).host;bar.append(dots,address);
     const heading=document.createElement('div');heading.className='paper-heading';const title=document.createElement('strong');title.textContent=paper.name;const subtitle=document.createElement('span');subtitle.textContent=paper.title;heading.append(title,subtitle);
-    const demo=document.createElement('div');demo.className='paper-demo';const poster=document.createElement('img');poster.alt=paper.name+' 官方项目页预览';poster.decoding='async';poster.loading='lazy';poster.onerror=()=>{poster.hidden=true;element.dataset.poster='unavailable';};
+    const demo=document.createElement('div');demo.className='paper-demo';const poster=document.createElement('img');poster.alt=paper.name+' 官方项目页预览';poster.decoding='async';poster.loading='lazy';
     const video=document.createElement('video');video.setAttribute('aria-hidden','true');const unavailable=document.createElement('span');unavailable.className='paper-unavailable';unavailable.textContent='预览暂不可用，点击打开原站';demo.append(poster,video,unavailable);
     const footer=document.createElement('div');footer.className='paper-footer';const venue=document.createElement('span');venue.textContent=paper.venue;const link=document.createElement('span');link.textContent='项目页 ↗';footer.append(venue,link);
     element.append(bar,heading,demo,footer);trail.append(element);
-    return {index,element,video,poster,source:paper.video,posterSource:paper.poster,posterLoaded:false};
+    element.hidden=true;
+    return {index,element,video,poster,source:paper.video,posterSource:paper.poster};
   });
   const playback=createPreviewPlayback(cards);
-  const buttons=papers.map((paper,i)=>{const b=document.createElement('button');b.type='button';b.textContent=String(i+1).padStart(2,'0');b.title=paper.name;b.setAttribute('aria-label',`定位 ${paper.name}`);b.onclick=e=>navigate(6+progressForCard(i,layout)*2,e.detail===0);nav.append(b);return b;});
+  const posters=createPreviewPosters(cards);
+  const previous=document.createElement('button'),next=document.createElement('button'),picker=document.createElement('select');
+  previous.type=next.type='button';previous.textContent='←';next.textContent='→';
+  previous.setAttribute('aria-label','上一个论文项目');next.setAttribute('aria-label','下一个论文项目');
+  picker.setAttribute('aria-label',`选择论文项目（共 ${papers.length} 项）`);
+  const placeholder=new Option(`浏览 ${papers.length} 项论文`,'');placeholder.disabled=true;picker.add(placeholder);
+  papers.forEach((paper,i)=>picker.add(new Option(`${String(i+1).padStart(2,'0')} / ${papers.length} · ${paper.name}`,String(i))));
+  picker.value='';
+  const locate=(i,instant=false)=>navigate(6+progressForCard(Math.max(0,Math.min(papers.length-1,i)),layout)*2,instant);
+  previous.onclick=e=>locate(selected-1,e.detail===0);next.onclick=e=>locate(selected+1,e.detail===0);
+  picker.onchange=()=>locate(Number(picker.value),true);nav.append(previous,picker,next);
   if(playButton)playButton.onclick=()=>{enabled=!enabled;explicitPlayback=true;playback.retry();updatePlayback();};
 
   function resize(){
@@ -59,7 +70,7 @@ export function createWork(root,wake,navigate=()=>{}){
   }
   function render(state,time,dt,reduce){
     lastState=state;reduced=reduce;
-    if(state.work<.001){if(visible){root.hidden=true;playback.sync([]);data(root,'playing','0');}visible=false;lastKey='';return;}
+    if(state.work<.001){if(visible){root.hidden=true;playback.sync([]);posters.sync([]);data(root,'playing','0');}visible=false;lastKey='';return;}
     if(!visible){root.hidden=false;visible=true;lastKey='';}
     const fieldActive=fieldStrength(state.camera)>.001;lean.x+=(aim.x-lean.x)*.12;lean.y+=(aim.y-lean.y)*.12;
     const key=`${state.p.toFixed(6)}:${reduce}:${fieldActive&&!reduce?Math.floor(time*30):0}`;if(key===lastKey)return;lastKey=key;
@@ -69,14 +80,18 @@ export function createWork(root,wake,navigate=()=>{}){
     draw(state,reduce?0:time);
     style(trail,'opacity',String(smooth((state.aperture-.76)/.24)));trail.inert=!state.gallery;
     const rects=cards.map(card=>{
-      const r=railCard(card.index,state.workProgress,layout);style(card.element,'transform',`translate3d(${r.x.toFixed(3)}px,${r.y.toFixed(3)}px,0)`);
-      card.element.hidden=!r.visible;card.element.tabIndex=r.visible&&state.gallery?0:-1;
-      if(r.visible&&state.gallery&&!card.posterLoaded){card.poster.src=card.posterSource;card.posterLoaded=true;}
+      const r=railCard(card.index,state.workProgress,layout);
+      if(r.visible)style(card.element,'transform',`translate3d(${r.x.toFixed(3)}px,${r.y.toFixed(3)}px,0)`);
+      if(card.element.hidden===r.visible)card.element.hidden=!r.visible;
+      const tabIndex=r.visible&&state.gallery?0:-1;if(card.element.tabIndex!==tabIndex)card.element.tabIndex=tabIndex;
       return r;
     });
-    const focused=playingCards(rects,width)[0]??-1;if(focused!==selected){selected=focused;buttons.forEach((b,i)=>b.setAttribute('aria-pressed',String(i===selected)));}
+    posters.sync(state.gallery?rects.filter(r=>r.visible).map(r=>r.index):[]);
+    const focused=rects.filter(r=>r.visible).sort((a,b)=>Math.abs(a.x+a.width/2-width/2)-Math.abs(b.x+b.width/2-width/2))[0]?.index??-1;
+    if(focused!==selected){selected=focused;picker.value=selected<0?'':String(selected);}
+    previous.disabled=selected<=0;next.disabled=selected===papers.length-1;
     updatePlayback(rects);
   }
   resize();
-  return {render,resize,scrollRange(){return workScrollRange(width,height);},get animating(){return visible&&lastState&&fieldStrength(lastState.camera)>.001&&!reduced;},pointer(x,y){aim.x=x;aim.y=y;wake();},pause(value){paused=value;updatePlayback();},dispose(){playback.dispose();canvas.width=canvas.height=sprite.width=sprite.height=1;canvas.remove();cards.forEach(c=>c.element.remove());buttons.forEach(b=>b.remove());if(playButton)playButton.onclick=null;root.hidden=true;}};
+  return {render,resize,scrollRange(){return workScrollRange(width,height);},get animating(){return visible&&lastState&&fieldStrength(lastState.camera)>.001&&!reduced;},pointer(x,y){aim.x=x;aim.y=y;wake();},pause(value){paused=value;updatePlayback();},dispose(){playback.dispose();posters.dispose();canvas.width=canvas.height=sprite.width=sprite.height=1;canvas.remove();cards.forEach(c=>c.element.remove());previous.onclick=next.onclick=picker.onchange=null;previous.remove();picker.remove();next.remove();if(playButton)playButton.onclick=null;root.hidden=true;}};
 }

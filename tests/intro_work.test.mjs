@@ -2,15 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Journey} from '../paperscientist/static/intro/motion.mjs';
 import {WORK_RANGE,CURTAIN_COUNT,CURTAIN_START,CURTAIN_END,railLayout,railCard,playingCards,progressForCard,entryForCard,wallTile,workPixelRatio,workCamera,portalBounds,cameraTile,workSpring,workScrollRange,workDistance} from '../paperscientist/static/intro/work-layout.mjs';
-import {createPreviewPlayback} from '../paperscientist/static/intro/paper-previews.mjs';
+import {papers,createPreviewPlayback,createPreviewPosters} from '../paperscientist/static/intro/paper-previews.mjs';
 
-test('at most two curtains including partial edges, disjoint alternating rails across viewport sizes',()=>{
+test('dense desktop curtains include at most five partial edges, with two on compact screens',()=>{
  for(const [w,h] of [[390,844],[680,380],[1280,720],[2160,1440],[3840,2160]]){
-  const layout=railLayout(w,h);
+  const layout=railLayout(w,h),capacity=w<700?2:5;let peak=0;
   for(let step=0;step<=1000;step++){
    const p=step/1000,rects=Array.from({length:CURTAIN_COUNT},(_,i)=>railCard(i,p,layout));
-   assert.ok(rects.filter(r=>r.visible).length<=2,`${w} at ${p}: too many curtains`);
-   for(const row of [0,1])assert.ok(rects.filter(r=>r.visible&&r.row===row).length<=1);
+   peak=Math.max(peak,rects.filter(r=>r.visible).length);
+   assert.ok(rects.filter(r=>r.visible).length<=capacity,`${w} at ${p}: too many curtains`);
+   for(const row of [0,1])assert.ok(rects.filter(r=>r.visible&&r.row===row).length<=Math.ceil(capacity/2));
    for(const a of rects){
     assert.ok(a.y>=0&&a.y+a.height<=h);
     for(const b of rects.filter(b=>b.index>a.index)){
@@ -22,18 +23,19 @@ test('at most two curtains including partial edges, disjoint alternating rails a
    }
    const live=playingCards(rects,w);assert.ok(live.length<=2);assert.equal(new Set(live.map(i=>i%2)).size,live.length);
   }
+  assert.equal(peak,capacity);
   for(let i=0;i<CURTAIN_COUNT;i++){const r=railCard(i,progressForCard(i,layout),layout);assert.ok(r.visible);if(i)assert.ok(Math.abs(r.x+r.width/2-w/2)<1e-8);}
  }
 });
 
-test('the opened wall starts empty and curtains enter from the right only at the preceding card reaches the half-screen handoff',()=>{
+test('the wall starts and ends empty while incoming curtains alternate at a regular, denser pitch',()=>{
  for(const [w,h] of [[390,844],[1280,720],[3840,2160]]){
   const layout=railLayout(w,h);
   for(let p=0;p<CURTAIN_START;p+=.01)for(let i=0;i<CURTAIN_COUNT;i++)assert.equal(railCard(i,p,layout).visible,false);
   for(let i=0;i<CURTAIN_COUNT;i++){
    const entry=entryForCard(i,layout),incoming=railCard(i,entry+1e-7,layout);
    assert.ok(incoming.visible&&incoming.x>w-1,'enters at right edge');
-   if(i){const outgoing=railCard(i-1,entry,layout);assert.notEqual(incoming.row,outgoing.row);assert.ok(outgoing.visible);assert.ok(Math.abs(outgoing.x+outgoing.width-w/2)<1e-6);}
+   if(i){const outgoing=railCard(i-1,entry,layout);assert.notEqual(incoming.row,outgoing.row);assert.ok(outgoing.visible);assert.ok(Math.abs(incoming.x-outgoing.x-layout.handoff)<.01);}
   }
   for(const p of [CURTAIN_END+.001,1])for(let i=0;i<CURTAIN_COUNT;i++)assert.equal(railCard(i,p,layout).visible,false);
  }
@@ -129,4 +131,24 @@ test('media errors and autoplay rejection expose fallback and can be retried exp
  const items=mediaItems(),controller=createPreviewPlayback(items);controller.sync([0,1]);items[0].video.onerror();items[1].pending[0].reject(new Error('autoplay blocked'));await flush();
  assert.equal(items[0].element.dataset.media,'unavailable');assert.equal(items[1].element.dataset.media,'paused');
  controller.retry();controller.sync([0,1]);assert.equal(items[0].pending.length,2);assert.equal(items[1].pending.length,2);controller.dispose();
+});
+
+
+test('36 distinct official project destinations have independent preview media',()=>{
+ assert.equal(papers.length,36);assert.equal(new Set(papers.map(p=>p.url)).size,36);
+ assert.equal(new Set(papers.map(p=>p.video)).size,36);
+ for(const p of papers){assert.ok(p.name&&p.title&&p.venue);assert.equal(new URL(p.url).protocol,'https:');assert.equal(new URL(p.video).protocol,'https:');assert.ok(p.poster.startsWith('https://')||p.poster.startsWith('/intro-assets/work-posters/'));}
+});
+
+test('poster sources stay bounded across all projects, reversal, retry and disposal',()=>{
+ const items=papers.map((p,index)=>({index,posterSource:p.poster,element:{dataset:{}},poster:{src:'',hidden:false,removeAttribute(){this.src='';}}}));
+ const posters=createPreviewPosters(items);
+ for(const direction of [1,-1])for(let j=0;j<36;j++){
+  const i=direction===1?j:35-j,visible=[i,i+1,i+2,i+3,i+4].filter(k=>k<36);
+  posters.sync(visible);assert.deepEqual(posters.active.sort((a,b)=>a-b),visible);assert.equal(items.filter(x=>x.poster.src).length,visible.length);
+ }
+ posters.sync([2]);items[2].poster.onerror();assert.equal(items[2].poster.hidden,true);
+ posters.sync([]);posters.sync([2]);assert.equal(items[2].poster.hidden,false);
+ posters.dispose();posters.sync([1,2]);assert.equal(items.filter(x=>x.poster.src).length,0);
+ assert.ok(items.every(x=>x.poster.onerror===null));
 });

@@ -5,8 +5,8 @@ import {CITIES} from './earth-data.mjs';
 import {bindPreludeInput} from './prelude-interaction.mjs?v=3';
 import {LAST_STOP,chapterStops,journeyFrame} from './journey-map.mjs';
 import {createWarp} from './warp.js';
-import {createWork} from './work.js?v=2';
-import {workSpring} from './work-layout.mjs?v=2';
+import {createWork} from './work.js?v=3';
+import {workSpring} from './work-layout.mjs?v=3';
 import {createClosingLandscape} from './closing-landscape.mjs?v=6';
 import {RECORD_SCORE,recordIndices} from './record-score.mjs';
 
