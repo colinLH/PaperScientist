@@ -3,6 +3,12 @@ import {leafPose} from './garden-atmosphere.mjs?v=4';
 
 const TAU=Math.PI*2,PERIOD=48,FLOAT_TIME=8;
 export const FISH_BUDGET=6;
+// Separate swept envelopes, not a shared crossing path. Even the tail's full
+// reach fits between neighboring envelopes at the smallest supported viewport.
+const fishRoutes=[
+  [.385,.822,.027,.008],[.545,.824,.034,.009],[.680,.850,.018,.009],
+  [.430,.945,.035,.012],[.600,.946,.038,.012],[.766,.968,.020,.012]
+];
 const seed=i=>{const n=Math.sin(i*127.1+311.7)*43758.5453;return n-Math.floor(n);};
 // A conservative water mask, traced in the original painting's coordinates.
 // It leaves the bridge piers and foreground rocks outside the swimming area.
@@ -37,11 +43,19 @@ export function pondLeafPose(i,time,w,h,reduced=false,crop={x:0,y:0,w:1,h:1}){
   return {...p,...point,scale:Math.max(.65,Math.min(1.35,h/800))*(3+seed(i+60)*4),alpha:reduced?0:p.alpha};
 }
 export function fishPose(i,time,reduced=false){
-  const t=reduced?0:time,phase=i*1.71;
-  const y=.851+i*.012+Math.sin(t*.10+phase)*.021,span=pondSpan(y);
-  const u=.5+Math.sin(t*(.075+i*.004)+phase)*.32;
-  return {x:span.left+.05+(span.right-span.left-.10)*u,y,
+  const t=reduced?0:time,phase=i*1.71,[cx,cy,rx,ry]=fishRoutes[i],rate=.065+i*.003,angle=t*rate+phase;
+  return {x:cx+Math.cos(angle)*rx,y:cy+Math.sin(angle)*ry,
+    vx:-Math.sin(angle)*rx*rate,vy:Math.cos(angle)*ry*rate,
     tail:Math.sin(t*(4.4+i*.17)+phase)*.55,alpha:.79+Math.sin(t*.18+phase)*.06};
+}
+export function framedFishPose(i,time,reduced,crop){
+  const sy=clamp((Math.min(.98,crop.y+crop.h-.04)-.81)/.17,.05,1);
+  const left=Math.max(.34,crop.x+.025),right=Math.min(.80,pondSpan(.81+.146*sy).right-.03,crop.x+crop.w-.025);
+  const sx=clamp((right-left)/.46,.05,1);
+  // Compress the swept envelopes and fish together when cover-cropping trims
+  // the pool. Slower travel compensates for tighter turns in shallow viewports.
+  const tempo=Math.min(sx,sy)/Math.max(sx,sy),p=fishPose(i,time*tempo,reduced);
+  return {...p,x:left+(p.x-.34)*sx,y:.81+(p.y-.81)*sy,vx:p.vx*sx*tempo,vy:p.vy*sy*tempo,size:Math.min(sx,sy)};
 }
 function clipWater(ctx,w,h,crop){
   ctx.beginPath();outline.forEach(([x,y],i)=>{const p=pondPoint(x,y,w,h,crop);i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});ctx.closePath();ctx.clip();
@@ -68,11 +82,11 @@ export function createGardenPond(){
   return {
     fish(ctx,w,h,time,reduced,crop){
       if(disposed)return 0;
-      const count=w<700?4:FISH_BUDGET,size=clamp(h/720*2.5,1.6,4.8);
+      const count=w<700?4:FISH_BUDGET,size=clamp(h/720*2.5,1,4.8);
       ctx.save();clipWater(ctx,w,h,crop);
       for(let i=0;i<count;i++){
-        const p=fishPose(i,time,reduced),next=fishPose(i,(reduced?0:time)+.04),a=pondPoint(p.x,p.y,w,h,crop),b=pondPoint(next.x,next.y,w,h,crop);
-        drawFish(ctx,{...p,...a},Math.atan2(b.y-a.y,b.x-a.x),size*(.85+seed(i+250)*.3),i);
+        const index=w<700?[0,2,3,5][i]:i,p=framedFishPose(index,time,reduced,crop),a=pondPoint(p.x,p.y,w,h,crop);
+        drawFish(ctx,{...p,...a},Math.atan2(p.vy*h/crop.h,p.vx*w/crop.w),size*p.size*(.85+seed(index+250)*.3),index);
       }ctx.restore();return count;
     },
     surface(ctx,w,h,time,reduced,crop){

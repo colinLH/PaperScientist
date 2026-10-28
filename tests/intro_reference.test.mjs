@@ -3,23 +3,27 @@ import assert from 'node:assert/strict';
 import {discLayout,discTransforms,imageCover,WaterRipples,referenceOpacity} from '../paperscientist/static/intro/reference-art.mjs';
 import {createPrelude} from '../paperscientist/static/intro/cosmic-art.mjs';
 
-test('disc layout keeps its diagonal order, bounded drag and a stable reduced-motion pose',()=>{
+test('disc layout keeps one equally sized row, bounded drag and a stable reduced-motion pose',()=>{
  for(const [w,h] of [[351,658],[1728,842],[3456,1684]]){
   for(const yaw of [-30,0,30]){
    const poses=[0,1,2,3].map(i=>discLayout(w,h,i,yaw,20));
    for(const p of poses)assert.ok(Object.values(p).every(Number.isFinite));
-   for(let i=1;i<poses.length;i++){assert.ok(poses[i].x>poses[i-1].x);assert.ok(poses[i].y<poses[i-1].y);}
+   for(let i=1;i<poses.length;i++){assert.ok(poses[i].x>poses[i-1].x);assert.equal(poses[i].y,poses[0].y);assert.equal(poses[i].d,poses[0].d);assert.equal(poses[i].angle,poses[0].angle);}
   }
   assert.deepEqual(discLayout(w,h,2,0,0,true),discLayout(w,h,2,0,50,true));
   assert.deepEqual(discLayout(w,h,2,30),discLayout(w,h,2,1.8));
  }
 });
-test('gallery exposes half the left disc and keeps the final desktop gap the widest',()=>{
- for(const [w,h] of [[1152,562],[2094,902],[3456,1684]]){
-  const p=[0,1,2,3].map(i=>discLayout(w,h,i,0,0,true));assert.equal(p[0].x,0);
-  const gaps=p.slice(1).map((v,i)=>v.x-p[i].x-(v.d+p[i].d)*.47);
-  assert.ok(gaps[2]>gaps[0]&&gaps[2]>gaps[1]);
-  assert.ok(p[3].x-p[2].x<w*(.97-.51));
+test('gallery uses the former second-disc diameter, uniform gaps and narrow draggable edge crops',()=>{
+ for(const [w,h] of [[351,658],[921,1065],[1152,562],[2094,902],[3456,1684]]){
+  const p=[0,1,2,3].map(i=>discLayout(w,h,i,0,0,true)),d=p[0].d;
+  if(w/h>2)assert.equal(d,Math.min(w*.4,h*.56));
+  const gaps=p.slice(1).map((v,i)=>v.x-p[i].x-d*.94);
+  assert.ok(gaps[0]>=0);assert.ok(Math.max(...gaps)-Math.min(...gaps)<1e-9);
+  const leftClip=d*.47-p[0].x,rightClip=p[3].x+d*.47-w;
+  assert.ok(leftClip>d*.05&&leftClip<d*.15);assert.ok(Math.abs(leftClip-rightClip)<1e-9);
+  assert.ok(discLayout(w,h,0,1.8).x-d*.47>=0);
+  assert.ok(discLayout(w,h,3,-1.8).x+d*.47<=w);
  }
 });
 test('record rotation stays inside the tilted plane, with a two-minute revolution and reduced-motion stop',()=>{

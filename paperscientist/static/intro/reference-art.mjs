@@ -1,6 +1,6 @@
 import {clamp,smooth} from './motion.mjs';
 import {createGardenAtmosphere,createGardenCanopy} from './garden-atmosphere.mjs?v=4';
-import {createGardenPond,pondLeafPose} from './garden-pond.mjs';
+import {createGardenPond,pondLeafPose} from './garden-pond.mjs?v=2';
 
 export const referenceOpacity=p=>p<1?1-smooth((p-.12)/.65):smooth((p-1.18)/.66)*(1-smooth((p-2.28)/.5));
 export const records=[
@@ -10,15 +10,16 @@ export const records=[
   {name:'探索',title:'Beyond',line:'向未知展开',note:'把问题带入更广阔的知识世界。',image:'disc-milky-way-4k.webp',style:'milky-way'},
 ];
 export function discLayout(w,h,index,yaw=0,time=0,reduced=false){
-  const narrow=w<700,positions=narrow?[0,.38,.94,1.68]:[0,.24,.55,.98];
-  const centers=narrow?[.68,.60,.50,.18]:[.73,.65,.49,.18];
-  const sizes=narrow?[.44,.60,.78,1.02]:[.33,.40,.48,.63];
-  const d=Math.min(w*sizes[index],h*(narrow?[.40,.46,.54,.72][index]:[.44,.56,.70,.98][index]));
-  return {x:w*positions[index]+clamp(yaw,-1.8,1.8)*w*.13,y:h*centers[index]+(reduced?0:Math.sin(time*.18+index*.9)*h*.006),d,angle:[-24,-26,25,-26][index]};
+  const narrow=w<700;
+  // The former second record sets the diameter. On phones fit all four in the
+  // same row; the two edge records lose only a slim part of their outer rim.
+  const d=Math.min(w*.28,h*(narrow?.46:.56)),edge=d*.37,step=(w-edge*2)/3;
+  const pan=clamp(yaw*w*.13,-d*.22,d*.22);
+  return {x:edge+index*step+pan,y:h*(narrow?.59:.60)+(reduced?0:Math.sin(time*.18)*h*.006),d,angle:-24};
 }
 export function discTransforms(pose,state,aim,time,reduced=false){
-  const y=(pose.central?-24:24)+clamp(state.yaw,-1.8,1.8)*10+(reduced?0:aim.x*3);
-  const x=(pose.central?12:-9)+clamp(state.pitch,-.85,.85)*18+(reduced?0:aim.y*2);
+  const y=24+clamp(state.yaw,-1.8,1.8)*10+(reduced?0:aim.x*3);
+  const x=-9+clamp(state.pitch,-.85,.85)*18+(reduced?0:aim.y*2);
   return {plane:`translate3d(${pose.x-pose.d/2}px,${pose.y-pose.d/2}px,0) perspective(1600px) rotateZ(${pose.angle}deg) rotateY(${y}deg) rotateX(${x}deg)`,
     // Spin the print inside the tilted plane, never around the screen's Z axis.
     spindle:`rotate(${reduced?0:(time*3)%360}deg)`};

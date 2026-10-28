@@ -1,7 +1,7 @@
 import {clamp,smooth} from './motion.mjs';
 import {PreludeInteraction,interactivePoint,experiments,experimentNotes} from './prelude-interaction.mjs?v=3';
 
-import {referenceOpacity} from './reference-art.mjs?v=5';
+import {referenceOpacity} from './reference-art.mjs?v=6';
 import {CITIES} from './earth-data.mjs';
 import {geoPoint,cityFocus,earthOpacity,EARTH_YAW,EARTH_SPEED} from './earth-geometry.mjs';
 
