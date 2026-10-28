@@ -17,7 +17,7 @@ const chapters=[
   {name:'星际穿梭',label:'穿过已知的边界',title:'向更远的\n问题出发。',description:'让好奇心，带你穿过这片星海。'},
   {name:'未知的星图',label:'在探索中保持方向',title:'让每一步探索，\n都有迹可循。',description:'你的判断、实验与发现，连成一张研究星图。'},
   {name:'研究作品',label:'从探索到表达',title:'让发现，\n成为作品。',description:'文献、方法、实验与表达，在这里相遇。'},
-  {name:'新的地平线',label:'PaperScientist',title:'接下来，\n是你的发现。',description:'带上一个问题，与科研伙伴一起出发。'}
+  {name:'新的地平线',label:'PaperScientist',title:'与科研 Agent\n一起出发。',description:'带上一个问题，开启你的下一项研究。'}
 ];
 const root=document.querySelector('#journey'),host=document.querySelector('#landscape'),copy=document.querySelector('#copy'),nav=document.querySelector('#chapters'),veil=document.querySelector('#valley-mist');
 const previous=document.querySelector('#previous'),next=document.querySelector('#next'),start=document.querySelector('#start'),credits=document.querySelector('#credits');
@@ -94,7 +94,7 @@ document.querySelectorAll('a[href="/?workspace=1"]').forEach(a=>a.addEventListen
 function dispose(){if(dead)return;dead=true;profiler?.dispose();cancel();clearTimeout(resizeTimer);hands?.dispose();hands=null;preludeInput.dispose();referenceInput.dispose();prelude.dispose();closing.dispose();warp.dispose();work.dispose();scene?.dispose();scene=null;audio.dispose();root.dataset.renderState='disposed';}
 window.addEventListener('pagehide',dispose);window.addEventListener('pageshow',e=>{if(e.persisted)location.reload();});
 import('./earth-globe.mjs?v=4').then(({createEarth})=>{if(!dead){try{prelude.attachGlobe(createEarth(document.querySelector('#earth-scene')));wake();}catch(error){console.warn('Earth: using projected city fallback',error.message);}}}).catch(error=>console.warn('Earth unavailable',error.message));
-import('./reference-art.mjs?v=9').then(({createReferenceArt})=>{if(!dead){prelude.attachReference(createReferenceArt(document.querySelector('#reference-art'),wake,{onPlaybackChange(mask){audio.setRecords(mask,true);audio.arm();}}));wake();}}).catch(error=>console.warn('Reference artwork unavailable',error.message));
+import('./reference-art.mjs?v=10').then(({createReferenceArt})=>{if(!dead){prelude.attachReference(createReferenceArt(document.querySelector('#reference-art'),wake,{onPlaybackChange(mask){audio.setRecords(mask,true);audio.arm();}}));wake();}}).catch(error=>console.warn('Reference artwork unavailable',error.message));
 controls();paint();audio.visibility(document.hidden);audio.arm();
 try{const {createScene}=await import('./scene.js?v=9');if(!dead){scene=createScene(host);paint();wake();}}catch(error){console.warn('Intro: using lightweight landscape',error.message);fallback();}
 if(scene&&!dead){try{const {createHands}=await import('./hands.js?v=4');if(!dead){hands=createHands({renderer:scene.renderer,panel:document.querySelector('#hand-camera'),button:document.querySelector('#hand-toggle'),wake});paint();wake();}}catch(error){console.warn('Hand controls unavailable',error.message);document.querySelector('#hand-toggle').textContent='手势暂不可用';}}

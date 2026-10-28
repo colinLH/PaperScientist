@@ -42,35 +42,85 @@ export function pondLeafPose(i,time,w,h,reduced=false,crop={x:0,y:0,w:1,h:1}){
   const p=landingLeaf(i,reduced?0:time),point=pondPoint(p.x,p.y,w,h,crop);
   return {...p,...point,scale:Math.max(.65,Math.min(1.35,h/800))*(3+seed(i+60)*4),alpha:reduced?0:p.alpha};
 }
-export function fishPose(i,time,reduced=false){
-  const t=reduced?0:time,phase=i*1.71,[cx,cy,rx,ry]=fishRoutes[i],rate=.065+i*.003,angle=t*rate+phase;
+export function fishPose(i,time,reduced=false,offset=0){
+  const t=reduced?0:time,phase=i*1.71,[cx,cy,rx,ry]=fishRoutes[i],rate=.065+i*.003,angle=t*rate+phase+(reduced?0:offset);
   return {x:cx+Math.cos(angle)*rx,y:cy+Math.sin(angle)*ry,
     vx:-Math.sin(angle)*rx*rate,vy:Math.cos(angle)*ry*rate,
     tail:Math.sin(t*(4.4+i*.17)+phase)*.55,alpha:.79+Math.sin(t*.18+phase)*.06};
 }
-export function framedFishPose(i,time,reduced,crop){
+export function framedFishPose(i,time,reduced,crop,offset=0){
   const sy=clamp((Math.min(.98,crop.y+crop.h-.04)-.81)/.17,.05,1);
   const left=Math.max(.34,crop.x+.025),right=Math.min(.80,pondSpan(.81+.146*sy).right-.03,crop.x+crop.w-.025);
   const sx=clamp((right-left)/.46,.05,1);
   // Compress the swept envelopes and fish together when cover-cropping trims
   // the pool. Slower travel compensates for tighter turns in shallow viewports.
-  const tempo=Math.min(sx,sy)/Math.max(sx,sy),p=fishPose(i,time*tempo,reduced);
-  return {...p,x:left+(p.x-.34)*sx,y:.81+(p.y-.81)*sy,vx:p.vx*sx*tempo,vy:p.vy*sy*tempo,size:Math.min(sx,sy)};
+  const tempo=Math.min(sx,sy)/Math.max(sx,sy),p=fishPose(i,time*tempo,reduced,offset),rate=.065+i*.003;
+  return {...p,x:left+(p.x-.34)*sx,y:.81+(p.y-.81)*sy,vx:p.vx*sx*tempo,vy:p.vy*sy*tempo,size:Math.min(sx,sy),
+    rx:fishRoutes[i][2]*sx,ry:fishRoutes[i][3]*sy,rate:rate*tempo,angle:reduced?i*1.71:time*tempo*rate+i*1.71+offset};
+}
+
+export const fishIndices=width=>width<700?[0,2,3,5]:[0,1,2,3,4,5];
+// Bigger, brighter fish still fit inside disjoint swept envelopes. Size is
+// bounded by the closest pair of envelopes, independently of swimming phase.
+export function fishScale(w,h,crop){
+  const poses=fishIndices(w).map(i=>framedFishPose(i,0,false,crop));let clearance=Infinity;
+  for(let i=0;i<poses.length;i++)for(let j=i+1;j<poses.length;j++){
+    const a=poses[i],b=poses[j],ax=a.x-Math.cos(a.angle)*a.rx,ay=a.y-Math.sin(a.angle)*a.ry,bx=b.x-Math.cos(b.angle)*b.rx,by=b.y-Math.sin(b.angle)*b.ry;
+    const dx=Math.max(0,Math.abs(ax-bx)-a.rx-b.rx)*w/crop.w,dy=Math.max(0,Math.abs(ay-by)-a.ry-b.ry)*h/crop.h;
+    clearance=Math.min(clearance,Math.hypot(dx,dy));
+  }
+  return Math.min(clamp(h/720*3.5,1.4,7)*poses[0].size,clearance*.43/11.5);
+}
+
+export function createFishSchool(){
+  const fish=Array.from({length:FISH_BUDGET},()=>({offset:0,speed:0,alarm:0,tail:0}));
+  return {
+    pose(i,time,reduced,crop){
+      const f=fish[i],p=framedFishPose(i,time,reduced,crop,f.offset);
+      return {...p,alpha:.94,tail:reduced?0:Math.sin(time*(4.4+i*.17)+i*1.71+f.tail)*(.55+Math.min(.25,f.speed*.3))};
+    },
+    tick(dt,time,w,h,crop,reduced){
+      if(reduced){for(const f of fish){f.alarm=f.speed=0;}return;}
+      // Fixed, bounded integration keeps heading changes smooth even if one
+      // render arrives late. Acceleration follows the current velocity.
+      const elapsed=clamp(dt,0,.1),steps=Math.max(1,Math.ceil(elapsed/.016)),step=elapsed/steps;
+      for(let n=0;n<steps;n++)for(let i=0;i<FISH_BUDGET;i++){
+        const f=fish[i],p=framedFishPose(i,time-elapsed+(n+1)*step,false,crop,f.offset);
+        f.alarm=Math.max(0,f.alarm-step);
+        f.speed+=((f.alarm>0?.9:0)-f.speed)*(1-Math.exp(-step*(f.alarm>0?12:2.5)));
+        const a=p.rx*w/crop.w,b=p.ry*h/crop.h;
+        const curvature=a*b/Math.max(1e-6,a*a*Math.sin(p.angle)**2+b*b*Math.cos(p.angle)**2);
+        const velocity=Math.min(f.speed,Math.max(0,1.6/curvature-p.rate));
+        f.offset=(f.offset+velocity*step)%TAU;f.tail=(f.tail+velocity*step*12)%TAU;
+      }
+    },
+    startle(x,y,time,w,h,crop,reduced=false){
+      if(reduced||!inPond(crop.x+x/w*crop.w,crop.y+y/h*crop.h))return 0;
+      const radius=clamp(h*.12,65,165);let affected=0;
+      for(const i of fishIndices(w)){
+        const p=this.pose(i,time,false,crop),q=pondPoint(p.x,p.y,w,h,crop);
+        if(Math.hypot(q.x-x,q.y-y)>radius)continue;
+        fish[i].alarm=3.6;affected++;
+      }return affected;
+    },
+    get startled(){return fish.filter(f=>f.alarm>0||f.speed>.03).length;},
+    reset(){for(const f of fish)f.offset=f.speed=f.alarm=f.tail=0;}
+  };
 }
 function clipWater(ctx,w,h,crop){
   ctx.beginPath();outline.forEach(([x,y],i)=>{const p=pondPoint(x,y,w,h,crop);i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});ctx.closePath();ctx.clip();
 }
 function drawFish(ctx,p,heading,size,index){
   ctx.save();ctx.translate(p.x,p.y);ctx.rotate(heading);ctx.scale(size,size);ctx.globalAlpha=p.alpha;
-  const tail=p.tail,orange=index%3===1?'#c65332':'#d97629',light=index%3===2?'#f4e3b3':'#efb451';
-  ctx.globalAlpha=.18;ctx.fillStyle='#304c3f';ctx.beginPath();ctx.ellipse(-.2,1.4,4.3,1.7,0,0,TAU);ctx.fill();
+  const tail=p.tail,orange=index%3===1?'#ed632a':'#f19723',light=index%3===2?'#fff5dc':'#ffe3a0';
+  ctx.globalAlpha=.26;ctx.fillStyle='#183e36';ctx.beginPath();ctx.ellipse(-.2,1.4,4.7,2,0,0,TAU);ctx.fill();
   // Thin, translucent double tail and pectoral fins sit beneath the warm body.
-  ctx.fillStyle='#df925b';ctx.globalAlpha=p.alpha*.56;ctx.beginPath();ctx.moveTo(-3,0);
+  ctx.fillStyle='#f4ae66';ctx.globalAlpha=p.alpha*.78;ctx.beginPath();ctx.moveTo(-3,0);
   ctx.bezierCurveTo(-6,-1+tail,-8,-4+tail*2,-10,-3+tail*2);
   ctx.quadraticCurveTo(-8,tail*3,-10,3+tail*2);ctx.bezierCurveTo(-7,4+tail*2,-5,1+tail,-3,0);ctx.fill();
   ctx.beginPath();ctx.moveTo(1,0);ctx.quadraticCurveTo(-1,-5,-3,-3);ctx.lineTo(-1,0);ctx.quadraticCurveTo(-1,4,-3,3);ctx.closePath();ctx.fill();
   ctx.globalAlpha=p.alpha;ctx.fillStyle=orange;ctx.beginPath();ctx.moveTo(5,0);
-  ctx.bezierCurveTo(4,-2.4,-1,-2.5,-4,0);ctx.bezierCurveTo(-1,2.5,4,2.4,5,0);ctx.fill();ctx.strokeStyle='#82522f';ctx.lineWidth=.2;ctx.stroke();
+  ctx.bezierCurveTo(4,-2.4,-1,-2.5,-4,0);ctx.bezierCurveTo(-1,2.5,4,2.4,5,0);ctx.fill();ctx.strokeStyle='#934420';ctx.lineWidth=.3;ctx.stroke();
   ctx.fillStyle=light;ctx.globalAlpha=p.alpha*.8;ctx.beginPath();ctx.ellipse(.7,-.5,2.6,.78,-.07,0,TAU);ctx.fill();
   ctx.globalAlpha=p.alpha*.75;ctx.fillStyle='#563b27';ctx.beginPath();ctx.arc(3.7,-.85,.28,0,TAU);ctx.fill();
   // A cool surface reflection breaks up the silhouette without a blur pass.
@@ -78,15 +128,22 @@ function drawFish(ctx,p,heading,size,index){
 }
 
 export function createGardenPond(){
-  let disposed=false;
+  let disposed=false,lastTime=null,view=null;const school=createFishSchool();
   return {
+    tap(x,y){if(disposed||!view)return {water:false,fish:0};const {w,h,time,reduced,crop}=view;
+      if(!inPond(crop.x+x/w*crop.w,crop.y+y/h*crop.h))return {water:false,fish:0};
+      return {water:true,fish:school.startle(x,y,time,w,h,crop,reduced)};
+    },
+    get startled(){return school.startled;},
+    pause(){lastTime=null;view=null;},
     fish(ctx,w,h,time,reduced,crop){
       if(disposed)return 0;
-      const count=w<700?4:FISH_BUDGET,size=clamp(h/720*2.5,1,4.8);
+      const indices=fishIndices(w),count=indices.length,size=fishScale(w,h,crop);
+      school.tick(lastTime===null?0:time-lastTime,time,w,h,crop,reduced);lastTime=time;view={w,h,time,reduced,crop};
       ctx.save();clipWater(ctx,w,h,crop);
       for(let i=0;i<count;i++){
-        const index=w<700?[0,2,3,5][i]:i,p=framedFishPose(index,time,reduced,crop),a=pondPoint(p.x,p.y,w,h,crop);
-        drawFish(ctx,{...p,...a},Math.atan2(p.vy*h/crop.h,p.vx*w/crop.w),size*p.size*(.85+seed(index+250)*.3),index);
+        const index=indices[i],p=school.pose(index,time,reduced,crop),a=pondPoint(p.x,p.y,w,h,crop);
+        drawFish(ctx,{...p,...a},Math.atan2(p.vy*h/crop.h,p.vx*w/crop.w),size,index);
       }ctx.restore();return count;
     },
     surface(ctx,w,h,time,reduced,crop){
@@ -104,6 +161,6 @@ export function createGardenPond(){
         }
       }ctx.restore();return active;
     },
-    dispose(){disposed=true;}
+    dispose(){disposed=true;school.reset();view=null;lastTime=null;}
   };
 }

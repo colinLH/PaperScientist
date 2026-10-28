@@ -1,6 +1,6 @@
 import {clamp,smooth} from './motion.mjs';
 import {createGardenAtmosphere,createGardenCanopy} from './garden-atmosphere.mjs?v=4';
-import {createGardenPond,pondLeafPose} from './garden-pond.mjs?v=2';
+import {createGardenPond,pondLeafPose} from './garden-pond.mjs?v=3';
 import {createRecordPlayers} from './record-player.mjs';
 import {recordIndices,toggleRecord} from './record-score.mjs';
 
@@ -71,8 +71,8 @@ export function createReferenceArt(host,wake,{onPlaybackChange=()=>{}}={}){
     if(playing){const [title,description]=researchNotes[playing];host.querySelector('[data-record-combination]').textContent=recordIndices(playing).map(j=>String(j+1).padStart(2,'0')).join(' + ')+' / RESEARCH';host.querySelector('[data-record-research]').textContent=title;host.querySelector('[data-record-description]').textContent=description;}
     onPlaybackChange(playing);wake();
   }
-  function water(x=.62,y=.84){ripples.add(x,y);waterFeedback=true;wake();}
-  function hide(){host.hidden=true;lastTime=null;ripples.items=[];}
+  function water(x=.62,y=.84){const hit=pond.tap(x*w,y*h);if(!hit.water)return; ripples.add(x,y);waterFeedback=true;host.dataset.fishStartled=String(hit.fish);wake();}
+  function hide(){host.hidden=true;lastTime=null;ripples.items=[];pond.pause();}
   return {get available(){return !dead;},get animating(){return stage!==0||players.animating;},hide,
     render({p,time,state,aim,w:width,h:height,reduced}){
       if(dead)return [];const alpha=referenceOpacity(p);if(alpha<.001){hide();return [];}
@@ -95,6 +95,7 @@ export function createReferenceArt(host,wake,{onPlaybackChange=()=>{}}={}){
             canopy.render(crop,w,h,t,reduced);
             airCrop={x:crop.x/img.naturalWidth,y:crop.y/img.naturalHeight,w:crop.w/img.naturalWidth,h:crop.h/img.naturalHeight};
             host.dataset.fish=String(pond.fish(ctx,w,h,gardenTime,reduced,airCrop));
+            host.dataset.fishStartled=String(pond.startled);
             // Preserve native 4K detail: only light glints overlay the water,
             // never repaint the photograph through the lower-resolution FX canvas.
             ctx.globalAlpha=1;atmosphere.shimmer(ctx,crop,w,h,gardenTime,reduced,img.naturalWidth,img.naturalHeight);
@@ -106,10 +107,10 @@ export function createReferenceArt(host,wake,{onPlaybackChange=()=>{}}={}){
       }
       frames++;host.dataset.frames=String(frames);host.dataset.selected=String(selected);host.dataset.ripples=String(ripples.items.length);host.dataset.motion=t.toFixed(3);host.dataset.yaw=state.yaw.toFixed(3);return [];
     },
-    tap(x,y){if(stage===2){if(y/h>=.70)water(x/w,y/h);return;}const available=discs.map((el,i)=>({i,rect:el.getBoundingClientRect()}));const inside=available.filter(({rect:r})=>x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom);if(inside.length)choose(inside.at(-1).i);else {const hit=players.hit(x,y);if(hit!==undefined)choose(hit);}},
+    tap(x,y){if(stage===2){const r=plate.getBoundingClientRect();water((x-r.left)/r.width,(y-r.top)/r.height);return;}const available=discs.map((el,i)=>({i,rect:el.getBoundingClientRect()}));const inside=available.filter(({rect:r})=>x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom);if(inside.length)choose(inside.at(-1).i);else {const hit=players.hit(x,y);if(hit!==undefined)choose(hit);}},
     activate(){if(stage===0)choose(selected);else water();},
     reset(){ripples.items=[];waterFeedback=false;wake();},
-    get info(){return stage===0?{help:'拖动调整视角 · 点击播放，多选发现组合乐曲',action:(playing&(1<<selected)?'收回':'播放')+records[selected].name+'唱片',selection:records[selected].line}:{help:'移动欣赏园林 · 点击水面泛起涟漪',action:'轻点水面',selection:waterFeedback?'涟漪渐息，让想法慢慢沉淀。':''};},
+    get info(){return stage===0?{help:'拖动调整视角 · 点击播放，多选发现组合乐曲',action:(playing&(1<<selected)?'收回':'播放')+records[selected].name+'唱片',selection:records[selected].line}:{help:'轻点水面泛起涟漪 · 靠近金鱼，看它游开',action:'轻点水面',selection:waterFeedback?'涟漪渐息，让想法慢慢沉淀。':''};},
     dispose(){dead=true;abort.abort();players.dispose();ripples.items=[];pond.dispose();atmosphere.dispose();canopy.dispose();img.removeAttribute('src');canvas.width=canvas.height=1;host.replaceChildren();host.hidden=true;}
   };
 }

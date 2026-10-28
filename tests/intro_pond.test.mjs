@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {landingLeaf,pondLeafPose,fishPose,framedFishPose,pondPoint,inPond,createGardenPond,FISH_BUDGET} from '../paperscientist/static/intro/garden-pond.mjs';
+import {landingLeaf,pondLeafPose,fishPose,framedFishPose,pondPoint,inPond,createGardenPond,createFishSchool,fishIndices,fishScale,FISH_BUDGET} from '../paperscientist/static/intro/garden-pond.mjs';
 import {imageCover} from '../paperscientist/static/intro/reference-art.mjs';
 
 test('water-bound leaves land continuously at their ripple origin, float inside the pond and fade before recycling',()=>{
@@ -78,4 +78,54 @@ test('pond renderer keeps fixed populations, suppresses reduced-motion impacts, 
  assert.equal(pond.fish(ctx,390,844,4,false,crop),4);assert.equal(pond.surface(ctx,1280,720,4,true,crop),0);assert.ok(clips>3000);
  assert.equal(pond.surface(ctx,1280,720,0,false,crop),0);assert.equal(pond.surface(ctx,1280,720,2.99,false,crop),0);assert.equal(pond.surface(ctx,1280,720,3.01,false,crop),1);
  pond.dispose();const stopped=calls;assert.equal(pond.fish(ctx,1280,720,5,false,crop),0);assert.equal(pond.surface(ctx,1280,720,5,false,crop),0);assert.equal(calls,stopped);
+});
+
+
+test('nearby water clicks accelerate fish without teleporting and settle back to cruising',()=>{
+ const w=1280,h=720,crop={x:0,y:0,w:1,h:1},school=createFishSchool(),initial=school.pose(0,0,false,crop),click=pondPoint(initial.x,initial.y,w,h,crop);
+ assert.equal(school.startle(5,5,0,w,h,crop),0);
+ assert.equal(school.startle(w*.3,h*.99,0,w,h,crop),0);
+ assert.ok(school.startle(click.x,click.y,0,w,h,crop)>=1);
+ assert.deepEqual(school.pose(0,0,false,crop),initial,'click does not jump position or heading');
+ for(let n=1;n<=180;n++)school.tick(1/60,n/60,w,h,crop,false);
+ const moved=school.pose(0,3,false,crop),calm=framedFishPose(0,3,false,crop),distance=p=>Math.hypot((p.x-initial.x)*w,(p.y-initial.y)*h);
+ assert.ok(distance(moved)>20&&distance(moved)>distance(calm)*3);
+ for(let n=181;n<=480;n++)school.tick(1/60,n/60,w,h,crop,false);
+ assert.equal(school.startled,0);
+ const a=school.pose(0,8,false,crop);school.tick(.016,8.016,w,h,crop,false);const b=school.pose(0,8.016,false,crop);
+ assert.ok(Math.hypot((b.x-a.x)*w,(b.y-a.y)*h)<.1,'returns to slow cruising');
+ assert.equal(school.startle(click.x,click.y,8,w,h,crop,true),0);
+ assert.deepEqual(school.pose(0,100,true,crop),school.pose(0,0,true,crop));
+});
+
+test('repeated startles keep visible fish apart, inside the water, and turning continuously at every size',()=>{
+ for(const [w,h] of [[390,844],[1280,720],[2327,1105],[3840,2160],[640,360]]){
+  const c=imageCover(3840,2160,w,h,w<=700?.62:.5),crop={x:c.x/3840,y:c.y/2160,w:c.w/3840,h:c.h/2160};
+  const school=createFishSchool(),ids=fishIndices(w),radius=fishScale(w,h,crop)*11.5;
+  let previous=ids.map(i=>school.pose(i,0,false,crop));
+  for(let n=1;n<=1800;n++){
+   const t=n/60;
+   if(n%45===0){const p=previous[(n/45)%ids.length],q=pondPoint(p.x,p.y,w,h,crop);school.startle(q.x,q.y,t-1/60,w,h,crop);}
+   school.tick(1/60,t,w,h,crop,false);const poses=ids.map(i=>school.pose(i,t,false,crop));
+   for(let i=0;i<poses.length;i++){
+    const p=poses[i],a=pondPoint(p.x,p.y,w,h,crop),old=previous[i];
+    assert.ok(inPond(p.x,p.y));assert.ok(a.x>radius&&a.x<w-radius&&a.y>radius&&a.y<h-radius,JSON.stringify({w,h,t,i,a,radius}));
+    assert.equal(p.alpha,.94);
+    const heading=v=>Math.atan2(v.vy*h/crop.h,v.vx*w/crop.w),delta=heading(p)-heading(old);
+    assert.ok(Math.abs(Math.atan2(Math.sin(delta),Math.cos(delta)))<.04,'no sudden reversal');
+    for(let j=i+1;j<poses.length;j++){const b=pondPoint(poses[j].x,poses[j].y,w,h,crop);assert.ok(Math.hypot(a.x-b.x,a.y-b.y)>radius*2,'body and tail clearance');}
+   }previous=poses;
+  }
+  school.tick(.1,40,w,h,crop,true);assert.equal(school.startled,0);
+ }
+});
+
+test('pond interactions use the displayed crop and stop accepting taps when hidden or disposed',()=>{
+ const pond=createGardenPond(),ctx=new Proxy({},{get:()=>()=>{}}),crop={x:0,y:0,w:1,h:1};
+ assert.equal(pond.tap(400,600).water,false);pond.fish(ctx,1280,720,0,false,crop);
+ const p=framedFishPose(0,0,false,crop),hit=pond.tap(p.x*1280,p.y*720);
+ assert.equal(hit.water,true);assert.ok(hit.fish>0);assert.equal(pond.tap(20,20).water,false);
+ pond.pause();assert.equal(pond.tap(p.x*1280,p.y*720).water,false);
+ pond.fish(ctx,1280,720,1,true,crop);assert.equal(pond.tap(p.x*1280,p.y*720).fish,0);
+ pond.dispose();assert.equal(pond.startled,0);assert.equal(pond.tap(400,600).water,false);
 });
