@@ -1,7 +1,7 @@
 import {clamp,smooth} from './motion.mjs';
-import {PreludeInteraction,interactivePoint,experiments,experimentNotes} from './prelude-interaction.mjs?v=2';
+import {PreludeInteraction,interactivePoint,experiments,experimentNotes} from './prelude-interaction.mjs?v=3';
 
-import {sculptureOpacity} from './research-sculpture.mjs?v=2';
+import {referenceOpacity} from './reference-art.mjs';
 import {CITIES} from './earth-data.mjs';
 import {geoPoint,cityFocus,earthOpacity,EARTH_YAW,EARTH_SPEED} from './earth-geometry.mjs';
 
@@ -68,7 +68,7 @@ export function createPrelude(canvas){
     const t=reduced?0:interaction.flow;phase=clamp(p,0,2);const warm=smooth(phase-1),sphere=1-Math.abs(phase-1),narrow=w<900;
     unit=Math.min(w*(narrow?.42:.34),h*(narrow?.24:.37));cx=w*(narrow?.5:.70);cy=h*(narrow?.62:.51);
     if(Math.round(phase)!==lastStage){interaction.selected=-1;lastStage=Math.round(phase);}
-    const earthBlend=earth?.available?earthOpacity(phase):0,studioBlend=studio?.available?sculptureOpacity(p):0;
+    const earthBlend=earth?.available?earthOpacity(phase):0,studioBlend=studio?.available?referenceOpacity(p):0;
     const pointer={x:((aim.x+1)*w/2-cx)/unit,y:(cy-(aim.y+1)*h/2)/unit};
     const project=q=>{const a=interactivePoint(q,phase,interaction,pointer);return {...a,sx:cx+a.x*unit,sy:cy-a.y*unit};};
     ctx.setTransform(ratio,0,0,ratio,0,0);ctx.globalAlpha=1;ctx.clearRect(0,0,w,h);ctx.fillStyle='#040c18';ctx.fillRect(0,0,w,h);if(studioBlend<.999)starDust(ctx,w,h,t,stars,.7);
@@ -132,10 +132,10 @@ export function createPrelude(canvas){
     canvas.dataset.art=['question-stream','global-cities','experiment-orbits'][Math.round(phase)];canvas.dataset.points=String(dots.length);canvas.dataset.morph=phase.toFixed(4);canvas.dataset.yaw=interaction.yaw.toFixed(3);canvas.dataset.selected=String(interaction.selected);canvas.dataset.actions=String(interaction.actions);canvas.dataset.pulses=String(interaction.pulses.length);
   }
   function select(index){interaction.selected=index;interaction.actions++;}
-  function activate(){if(phase<.5)interaction.pulse(0,0);else {const list=[...new Set(hits.map(q=>q.index))];select(list[(list.indexOf(interaction.selected)+1)%Math.max(1,list.length)]??0);}}
-  resize();return {render,resize,attachGlobe(globe){earth=globe;},attachSculpture(value){studio=value;},selectCity(index){if(!CITIES[index])return;select(index);const aim=cityFocus(CITIES[index],interaction.reduced?0:interaction.flow,interaction.yaw);interaction.targetYaw=aim.yaw;interaction.targetPitch=aim.pitch;},pointer(x,y){aim.x=clamp(x,-1,1);aim.y=clamp(y,-1,1);},over(value){interaction.over=value;},hold(value){interaction.held=value;},drag(dx,dy){interaction.drag(dx,dy);},activate,
-    tap(x,y){if(phase<.5)interaction.pulse((x-cx)/unit,(cy-y)/unit);else {const nearest=[...hits].sort((a,b)=>Math.hypot(a.x-x,a.y-y)-Math.hypot(b.x-x,b.y-y))[0];if(nearest&&(Math.round(phase)!==1||Math.hypot(nearest.x-x,nearest.y-y)<Math.max(26,unit*.12)))select(nearest.index);}},
-    reset(){interaction.reset();},speed(){interaction.speed=interaction.speed===1?2.5:1;},
-    get info(){const stage=Math.round(phase),index=interaction.selected;return {stage,selected:index,speed:interaction.speed,help:['拖动观察光带 · 点击让线索流动','拖动旋转地球 · 点击城市查看位置','拖动观察透镜 · 点击节点拆解研究'][stage],action:['点亮线索','探索下一城市','探索下一层'][stage],selection:stage===0?(interaction.activated?'线索已点亮 · 从问题开始探索':''):index<0?(stage===1?'41 座城市 · 连线为探索示意':''):stage===1?CITIES[index%CITIES.length].name+' · '+CITIES[index%CITIES.length].en+' · '+Math.abs(CITIES[index%CITIES.length].lat).toFixed(1)+'°'+(CITIES[index%CITIES.length].lat<0?'S':'N')+' / '+Math.abs(CITIES[index%CITIES.length].lon).toFixed(1)+'°'+(CITIES[index%CITIES.length].lon<0?'W':'E'):stage===2?experiments[index%6]+' · '+experimentNotes[index%6]:''};},
+  function activate(){if(studio?.activate&&Math.round(phase)!==1){studio.activate();interaction.actions++;return;}if(phase<.5)interaction.pulse(0,0);else {const list=[...new Set(hits.map(q=>q.index))];select(list[(list.indexOf(interaction.selected)+1)%Math.max(1,list.length)]??0);}}
+  resize();return {render,resize,attachGlobe(globe){earth=globe;},attachReference(value){studio=value;},selectCity(index){if(!CITIES[index])return;select(index);const aim=cityFocus(CITIES[index],interaction.reduced?0:interaction.flow,interaction.yaw);interaction.targetYaw=aim.yaw;interaction.targetPitch=aim.pitch;},pointer(x,y){aim.x=clamp(x,-1,1);aim.y=clamp(y,-1,1);},over(value){interaction.over=value;},hold(value){interaction.held=value;},drag(dx,dy){interaction.drag(dx,dy);},activate,
+    tap(x,y){if(studio?.tap&&Math.round(phase)!==1){studio.tap(x,y);interaction.actions++;return;}if(phase<.5)interaction.pulse((x-cx)/unit,(cy-y)/unit);else {const nearest=[...hits].sort((a,b)=>Math.hypot(a.x-x,a.y-y)-Math.hypot(b.x-x,b.y-y))[0];if(nearest&&(Math.round(phase)!==1||Math.hypot(nearest.x-x,nearest.y-y)<Math.max(26,unit*.12)))select(nearest.index);}},
+    reset(){interaction.reset();studio?.reset?.();},speed(){interaction.speed=interaction.speed===1?2.5:1;},
+    get info(){const stage=Math.round(phase),index=interaction.selected;if(studio?.info&&stage!==1)return {stage,selected:-1,speed:interaction.speed,...studio.info};return {stage,selected:index,speed:interaction.speed,help:['拖动观察光带 · 点击让线索流动','拖动旋转地球 · 点击城市查看位置','拖动观察透镜 · 点击节点拆解研究'][stage],action:['点亮线索','探索下一城市','探索下一层'][stage],selection:stage===0?(interaction.activated?'线索已点亮 · 从问题开始探索':''):index<0?(stage===1?'41 座城市 · 连线为探索示意':''):stage===1?CITIES[index%CITIES.length].name+' · '+CITIES[index%CITIES.length].en+' · '+Math.abs(CITIES[index%CITIES.length].lat).toFixed(1)+'°'+(CITIES[index%CITIES.length].lat<0?'S':'N')+' / '+Math.abs(CITIES[index%CITIES.length].lon).toFixed(1)+'°'+(CITIES[index%CITIES.length].lon<0?'W':'E'):stage===2?experiments[index%6]+' · '+experimentNotes[index%6]:''};},
     dispose(){dead=true;earth?.dispose();studio?.dispose();interaction.pulses=[];canvas.width=canvas.height=1;canvas.hidden=true;}};
 }

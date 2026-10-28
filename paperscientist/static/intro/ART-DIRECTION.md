@@ -1,5 +1,14 @@
 # A question becomes a journey
 
+## User-reference revision — 2026-10-28
+
+The newest explicit reference supersedes the previous material sculptures. Chapter one closely follows the supplied A24 disc-gallery composition: a cool paper-white inset frame, compact top-left serif heading and ruled metadata, enormous printed discs rising diagonally from the lower-left to cropped upper-right, and two small editorial captions below. Research-themed labels and our local imagery replace movie branding and claims. Chapter three follows the supplied painted garden: red pagoda, stone bridge, autumn trees, mountains, mist and reflective water; a small caption leaves the artwork dominant. This is a deliberate departure from the rejected dark metal abstractions, not another variation of them.
+
+Palette: paper #efefed, ink #1c1d1a, stone #8c938b, vermilion #9f3b24, moss #54624b, autumn gold #b29459. Type: Georgia/Chinese Song-style serif display, compact system-sans metadata. Desktop layout: [small record / oversized diagonal discs / cropped disc]; garden: [full landscape / small bottom-left caption / quiet water controls]. Mobile preserves a cropped disc sequence below the record and the central pagoda/bridge in the garden. The exact reference composition takes precedence over generic design-skill defaults.
+
+The original generated panoramic garden is a reference-based reconstruction, not a photograph. The asset and generation prompt are saved locally. Discs use CSS perspective with genuine centre holes; the scene uses no extra WebGL context. Pointer parallax, drag, disc selection, bounded water ripples and slow mist share the existing clock. Reduced motion fixes ambient time and preserves selection. Narrative: collect possible questions, connect global knowledge, then settle into sustained research before the later voyage.
+
+
 ## Material-led revision — 2026-10-27
 
 The user's editorial/product-design reference now supersedes the particle wave and toy-like planetary artwork in chapters one and three. The composition remains left-aligned reading space beside one large interactive subject. Palette: instrument charcoal `#0d1118`, slate `#29333b`, brushed silver `#b7c0c8`, paper white `#eeeae2`, champagne detail `#c3ac80`. Chinese serif display type contrasts with quiet system-sans controls; the rotating geographic globe retains its own established styling.

@@ -60,6 +60,7 @@ export function bindPreludeInput(surface,art,wake){
   surface.addEventListener('pointerleave',()=>{if(!gesture)art.over(false);},options);
   surface.addEventListener('touchend',e=>{if(claimed)e.stopPropagation();claimed=false;},{...options,passive:true});
   surface.addEventListener('keydown',e=>{
+    if(e.target!==surface&&e.target?.closest?.('button,a,input,select,textarea'))return;
     if(!['ArrowLeft','ArrowRight','Enter',' ','Escape'].includes(e.key))return;e.preventDefault();e.stopPropagation();
     if(e.key==='Escape')art.reset();else if(e.key==='ArrowLeft'||e.key==='ArrowRight')art.drag(e.key==='ArrowLeft'?-.1:.1,0);else art.activate();wake();
   },options);

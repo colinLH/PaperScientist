@@ -1,17 +1,17 @@
 import {Journey} from './motion.mjs';
 import {Soundscape} from './audio.js?v=2';
-import {createPrelude,preludeOpacity} from './cosmic-art.mjs?v=9';
+import {createPrelude,preludeOpacity} from './cosmic-art.mjs?v=10';
 import {CITIES} from './earth-data.mjs';
-import {bindPreludeInput} from './prelude-interaction.mjs?v=2';
+import {bindPreludeInput} from './prelude-interaction.mjs?v=3';
 import {LAST_STOP,chapterStops,journeyFrame} from './journey-map.mjs';
 import {createWarp} from './warp.js';
 import {createWork} from './work.js?v=2';
 import {workSpring} from './work-layout.mjs?v=2';
 
 const chapters=[
-  {name:'问题与线索',label:'从一个问题出发',title:'好奇心，\n值得被认真对待。',description:'从一个尚未回答的问题开始。让散落的线索，逐渐显露方向。'},
+  {name:'研究灵感集',label:'从一个问题出发',title:'从一个问题，\n走向多种可能。',description:'观察、阅读、判断，让每一个线索都有继续探索的可能。'},
   {name:'全球城市',label:'跨越城市，连接灵感',title:'让世界相连，\n看见新的方向。',description:'从北京到纽约，从伦敦到悉尼，让探索与全球的灵感相遇。'},
-  {name:'方法与证据',label:'让想法接受检验',title:'让一个想法，\n经得起推敲。',description:'连接世界的知识之后，再聚焦于你的问题。把方法、实验与证据，放在同一条光路上。'},
+  {name:'研究庭院',label:'让灵感慢慢沉淀',title:'把想法，\n沉淀成研究。',description:'走过知识的广阔天地，再回到一个值得专注的问题。让阅读、思考与验证，在这里慢慢生长。'},
   {name:'星际穿梭',label:'穿过已知的边界',title:'向更远的\n问题出发。',description:'让好奇心，带你穿过这片星海。'},
   {name:'未知的星图',label:'在探索中保持方向',title:'让每一步探索，\n都有迹可循。',description:'你的判断、实验与发现，连成一张研究星图。'},
   {name:'研究作品',label:'从探索到表达',title:'让发现，\n成为作品。',description:'文献、方法、实验与表达，在这里相遇。'},
@@ -27,6 +27,7 @@ const cityPicker=document.querySelector('#earth-city');
 CITIES.forEach((c,i)=>{const option=document.createElement('option');option.value=i;option.textContent=c.name+' · '+c.en;cityPicker.append(option);});
 cityPicker.onchange=()=>{if(cityPicker.value!==''){prelude.selectCity(Number(cityPicker.value));wake();}};
 const preludeInput=bindPreludeInput(interactionSurface,prelude,wake);
+const referenceInput=bindPreludeInput(document.querySelector('#reference-art'),prelude,wake);
 const interactionHelp=document.querySelector('#prelude-help'),interactionAction=document.querySelector('#prelude-action'),interactionSelection=document.querySelector('#prelude-selection'),interactionSpeed=document.querySelector('#prelude-speed');
 interactionAction.onclick=()=>{prelude.activate();wake();};document.querySelector('#prelude-reset').onclick=()=>{prelude.reset();wake();};interactionSpeed.onclick=()=>{prelude.speed();wake();};
 const warp=createWarp(document.querySelector('#warp-canvas')),work=createWork(document.querySelector('#work-scene'),wake,go),warpControls=document.querySelector('#warp-controls');
@@ -44,8 +45,8 @@ function paint(now=performance.now(),dt=1/30){
   data(root,'position',p.toFixed(5));data(root,'moving',String(journey.moving));
   if(veil)veil.hidden=true;
   const opening=preludeOpacity(p);style(host,'visibility',p<3.3?'hidden':'visible');data(root,'prelude',String(p<2.5));prelude.render(p,now/1000,reduced.matches);
-  const interactive=p<2.28&&!leaving;interactionSurface.hidden=interactionTools.hidden=!interactive;
-  if(!interactive)preludeInput.cancel();else{const info=prelude.info;for(const [el,text] of [[interactionHelp,info.help],[interactionAction,info.action],[interactionSelection,info.selection]])if(el.textContent!==text)el.textContent=text;cityPicker.hidden=info.stage!==1;cityPicker.value=info.stage===1&&info.selected>=0?String(info.selected):'';interactionSpeed.hidden=info.stage!==2;interactionSpeed.setAttribute('aria-pressed',String(info.speed>1));interactionSpeed.textContent=info.speed>1?'恢复流速':'加快光流';}
+  const interactive=p<2.28&&!leaving;interactionTools.hidden=!interactive;interactionSurface.hidden=!interactive||!document.querySelector('#reference-art').hidden;
+  if(!interactive){preludeInput.cancel();referenceInput.cancel();}else{const info=prelude.info;for(const [el,text] of [[interactionHelp,info.help],[interactionAction,info.action],[interactionSelection,info.selection]])if(el.textContent!==text)el.textContent=text;cityPicker.hidden=info.stage!==1;cityPicker.value=info.stage===1&&info.selected>=0?String(info.selected):'';interactionSpeed.hidden=info.stage!==2;interactionSpeed.setAttribute('aria-pressed',String(info.speed>1));interactionSpeed.textContent=info.speed>1?'恢复水波':'加快水波';}
   if(scene){if(scene.setDetail(!journey.moving&&Math.abs(p-4)<.025))hands?.resize();if(p>=3.3&&Math.max(opening,state.warp,state.work)<.999&&(now-lastLandscapePaint>=32||!journey.moving)){scene.render(state.landscape,reduced.matches?0:now/1000);lastLandscapePaint=now;}}else style(host,'background',`radial-gradient(ellipse at 65% 40%,${['#789698','#80979b','#41576d','#162d48','#a19e9b','#e0c391'][Math.round(state.landscape)]},#142b3d 75%)`);
   hands?.setActive(Math.abs(p-4)<.45&&!credits.open&&!document.hidden&&!leaving);
   hands?.render(now/1000,state.star);
@@ -72,8 +73,8 @@ root.addEventListener('touchcancel',()=>{touchY=null;},{passive:true});
 root.addEventListener('pointerdown',e=>{if(!audio.armed&&!e.target.closest('#sound,a,#credits-open'))audio.arm();},{passive:true});
 root.addEventListener('touchend',()=>audio.arm(),{passive:true});
 document.addEventListener('keydown',e=>{if(!credits.open&&!e.repeat&&!e.target.closest('#sound,a,#credits-open'))audio.arm();});
-document.querySelector('#credits-open').onclick=()=>{cancel();credits.showModal();audio.visibility(true);hands?.setActive(false);preludeInput.cancel();work.pause(true);};credits.addEventListener('close',()=>{audio.visibility(document.hidden);work.pause(document.hidden);wake();});
-document.addEventListener('visibilitychange',()=>{audio.visibility(document.hidden);hands?.visibility(document.hidden);work.pause(document.hidden);if(document.hidden){preludeInput.cancel();cancel();root.dataset.renderState='hidden';}else wake();});
+document.querySelector('#credits-open').onclick=()=>{cancel();credits.showModal();audio.visibility(true);hands?.setActive(false);preludeInput.cancel();referenceInput.cancel();work.pause(true);};credits.addEventListener('close',()=>{audio.visibility(document.hidden);work.pause(document.hidden);wake();});
+document.addEventListener('visibilitychange',()=>{audio.visibility(document.hidden);hands?.visibility(document.hidden);work.pause(document.hidden);if(document.hidden){preludeInput.cancel();referenceInput.cancel();cancel();root.dataset.renderState='hidden';}else wake();});
 reduced.addEventListener('change',()=>go(journey.target,true));
 window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{scene?.resize();hands?.resize();prelude.resize();warp.resize();work.resize();wake();},120);});
 function fallback(){hands?.dispose();hands=null;scene?.dispose();scene=null;document.querySelector('#fallback').hidden=false;wake();}
@@ -81,10 +82,10 @@ host.addEventListener('scene-lost',fallback);
 host.addEventListener('scene-ready',wake);
 async function enter(e){if(e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;e.preventDefault();if(leaving)return;leaving=true;audio.fadeOut();root.animate([{opacity:1},{opacity:0}],{duration:reduced.matches?180:800,easing:'ease-out',fill:'forwards'});setTimeout(()=>{dispose();location.assign(e.currentTarget?.href||'/?workspace=1');},reduced.matches?200:1000);}
 document.querySelectorAll('a[href="/?workspace=1"]').forEach(a=>a.addEventListener('click',enter));
-function dispose(){if(dead)return;dead=true;cancel();clearTimeout(resizeTimer);hands?.dispose();hands=null;preludeInput.dispose();prelude.dispose();warp.dispose();work.dispose();scene?.dispose();scene=null;audio.dispose();root.dataset.renderState='disposed';}
+function dispose(){if(dead)return;dead=true;cancel();clearTimeout(resizeTimer);hands?.dispose();hands=null;preludeInput.dispose();referenceInput.dispose();prelude.dispose();warp.dispose();work.dispose();scene?.dispose();scene=null;audio.dispose();root.dataset.renderState='disposed';}
 window.addEventListener('pagehide',dispose);window.addEventListener('pageshow',e=>{if(e.persisted)location.reload();});
 import('./earth-globe.mjs?v=4').then(({createEarth})=>{if(!dead){try{prelude.attachGlobe(createEarth(document.querySelector('#earth-scene')));wake();}catch(error){console.warn('Earth: using projected city fallback',error.message);}}}).catch(error=>console.warn('Earth unavailable',error.message));
-import('./research-sculpture.mjs?v=2').then(({createSculpture})=>{if(!dead){try{prelude.attachSculpture(createSculpture(document.querySelector('#research-sculpture')));wake();}catch(error){console.warn('Sculpture: using lightweight artwork',error.message);}}}).catch(error=>console.warn('Sculpture unavailable',error.message));
+import('./reference-art.mjs').then(({createReferenceArt})=>{if(!dead){prelude.attachReference(createReferenceArt(document.querySelector('#reference-art'),wake));wake();}}).catch(error=>console.warn('Reference artwork unavailable',error.message));
 controls();paint();audio.visibility(document.hidden);audio.arm();
 try{const {createScene}=await import('./scene.js?v=9');if(!dead){scene=createScene(host);paint();wake();}}catch(error){console.warn('Intro: using lightweight landscape',error.message);fallback();}
 if(scene&&!dead){try{const {createHands}=await import('./hands.js?v=4');if(!dead){hands=createHands({renderer:scene.renderer,panel:document.querySelector('#hand-camera'),button:document.querySelector('#hand-toggle'),wake});paint();wake();}}catch(error){console.warn('Hand controls unavailable',error.message);document.querySelector('#hand-toggle').textContent='手势暂不可用';}}
