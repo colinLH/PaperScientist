@@ -23,11 +23,12 @@ class IntroTests(unittest.TestCase):
             self.assertEqual(r.status_code, 206)
             self.assertEqual(len(r.content), 100)
             for mask in range(1, 16):
-                r = c.get(f'/intro-assets/audio/records/{mask:02}.opus', headers={'range': 'bytes=0-99'})
+                filename = '15-hyperion' if mask == 15 else f'{mask:02}'
+                r = c.get(f'/intro-assets/audio/records/{filename}.opus', headers={'range': 'bytes=0-99'})
                 self.assertEqual(r.status_code, 206)
                 self.assertEqual(r.content[:4], b'OggS')
                 self.assertIn('audio/ogg', r.headers['content-type'])
-            for asset in ('record-player.mjs', 'record-audio.mjs', 'record-score.mjs', 'textures/record-player-walnut.png'):
+            for asset in ('record-player.mjs', 'record-celebration.mjs', 'record-audio.mjs', 'record-score.mjs', 'textures/record-player-walnut.png', 'textures/record-hand.png'):
                 self.assertEqual(c.get('/intro-assets/' + asset).status_code, 200)
             # Browser workers and WASM must work from the same local origin,
             # without a CDN or frontend package manager at runtime.

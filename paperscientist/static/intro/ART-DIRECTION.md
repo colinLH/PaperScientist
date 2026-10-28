@@ -77,3 +77,10 @@ The pond's six fish (four on narrow screens) occupy separate swept envelopes, in
 The user's new musical interaction supersedes the automatic idle spin. Each still record becomes a tactile walnut turntable on selection, using a shared photorealistic cutout and an independently moving metallic tonearm. A reversible lift-and-settle transition preserves continuity through repeated clicks. The third sleeve now reads EVERY IDEA / BEGINS HERE. The surrounding editorial gallery, existing artworks and equal idle sizes stay in place.
 
 The fifteen unordered selections each play one distinct licensed composition. Gold note connections form a reading path from left to right, dipping beneath skipped records. The notes remain tightly spaced and alternate glyphs. A compact composition caption and retained playback position explain the interaction without covering the artwork. Crossfade, limited decoders, cached routes, bounded effects resolution and complete idle suspension keep the feature within the existing rendering budget. Asset provenance and the final image-generation prompt are in `record-player-sources.md`.
+
+
+## Hands and a listening room — 2026-10-28
+
+The first chapter becomes a warm, tactile listening room. Oblique window light, a quiet tabletop, and a fan of four artwork sleeves give the equal-sized discs a physical setting. Existing art, typography and drag behavior remain. The backdrop is static and reuses the same four image resources.
+
+A photorealistic hand reaches the lower-right rim, accompanies the reversible lift-and-place transition, and withdraws before playback. Its physical screen size remains consistent as the record settles. Selecting all four briefly celebrates their connection with three colored firework blooms and Hyperion's uplifting orchestral score. Both effects use the existing animation clock, with a fixed particle budget and no continuing celebration after the burst. Reduced-motion users retain selection and sound without the added movement.

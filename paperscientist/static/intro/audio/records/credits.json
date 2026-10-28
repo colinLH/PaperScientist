@@ -183,15 +183,15 @@
   },
   {
     "mask": 15,
-    "title": "Starfire",
+    "title": "Hyperion",
     "author": "Scott Buckley",
-    "page": "https://www.scottbuckley.com.au/library/starfire/",
-    "download": "https://www.scottbuckley.com.au/library/wp-content/uploads/2026/01/Starfire.mp3",
+    "page": "https://www.scottbuckley.com.au/library/hyperion/",
+    "download": "https://www.scottbuckley.com.au/library/wp-content/uploads/2024/06/Hyperion.mp3",
     "license": "CC BY 4.0",
     "license_url": "https://creativecommons.org/licenses/by/4.0/",
     "changes": "Full-length Opus transcode at 80 kbps VBR; no cuts. Playback gain and crossfade only.",
-    "sha256": "47e781ffede3dad5405437cf88485351dda16bd81349211177807f66c8ea341f",
-    "source_sha256": "d97bd4c5256fd4ccceaab1e5660844b92905c66d570c0e40f774b73c711e8c1c",
-    "bytes": 3381035
+    "sha256": "0a183c2b012885f2f701df8473e3cb4f5cd1661d630892e60008c70aa4add00b",
+    "source_sha256": "559961b869bb3ae223522a740ba25ff04cc2897299595a5afdca348f57edeb9a",
+    "bytes": 2556561
   }
 ]

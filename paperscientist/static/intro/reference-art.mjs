@@ -28,6 +28,7 @@ export class WaterRipples{
 
 export function createReferenceArt(host,wake,{onPlaybackChange=()=>{}}={}){
   host.innerHTML=`<section class="disc-gallery" aria-label="研究灵感唱片集">
+    <div class="record-room" aria-hidden="true"><div class="room-window"></div><div class="room-table"></div><div class="room-sleeves">${records.map((r,i)=>`<div class="room-sleeve" style="--slot:${i}"><img src="/intro-assets/textures/${r.image}" alt=""/><span>0${i+1} / ${r.name}</span></div>`).join('')}<small>A COLLECTION OF POSSIBILITIES</small></div><span class="room-imprint">PAPERSCIENTIST<br><b>Listening room</b><i>READ · CONNECT · DISCOVER</i></span></div>
     <div class="disc-record"><h1>从一个问题<br>走向多种可能。</h1><dl><div><dt>研究起点</dt><dd>你的好奇心</dd></div><div><dt>正在浏览</dt><dd data-record-name>方向</dd></div><div><dt>下一步</dt><dd data-record-note>比较不同解释，留下值得验证的假设。</dd></div></dl></div>
     <div class="disc-field"></div><div class="disc-editorial"><p><small>阅读与关联</small>“沿着线索，<br>发现新的联系。”</p><p><small>提问与判断</small>“让值得追问的问题，<br>成为研究的起点。”</p></div>
     <div class="record-now" hidden><span data-record-combination></span><strong data-record-track role="status" aria-live="polite"></strong><small>再点唱片收回 · 进度自动保留</small><small id="record-audio-status" aria-live="off"></small></div>
@@ -48,7 +49,7 @@ export function createReferenceArt(host,wake,{onPlaybackChange=()=>{}}={}){
   function choose(i){
     selected=i;playing=toggleRecord(playing,i);name.textContent=records[i].name;note.textContent=records[i].note;
     discs.forEach((d,j)=>{const active=Boolean(playing&(1<<j));d.setAttribute('aria-pressed',String(active));d.setAttribute('aria-label',(active?'收回':'播放')+records[j].name+'唱片');});
-    players.set(playing);now.hidden=!playing;editorial.hidden=Boolean(playing);gallery.dataset.playing=String(playing);host.dataset.playing=String(playing);
+    players.set(playing);now.hidden=!playing;editorial.hidden=Boolean(playing);gallery.dataset.playing=String(playing);gallery.dataset.ensemble=String(playing===15);host.dataset.playing=String(playing);
     if(playing){host.querySelector('[data-record-combination]').textContent=recordIndices(playing).map(j=>String(j+1).padStart(2,'0')).join(' + ')+' / '+(recordIndices(playing).length>1?'COMPOSITION':'NOW PLAYING');host.querySelector('[data-record-track]').textContent=RECORD_SCORE[playing].title;}
     onPlaybackChange(playing);wake();
   }

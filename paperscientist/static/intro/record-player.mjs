@@ -1,23 +1,43 @@
 import {clamp,smooth} from './motion.mjs';
 import {recordIndices} from './record-score.mjs';
+import {RecordFireworks} from './record-celebration.mjs';
 
 const mix=(a,b,t)=>a+(b-a)*t;
-const style=(el,key,value)=>{if(el.style[key]!==value)el.style[key]=value;};
+// Cache our own inputs: CSSOM normalizes floats and whitespace, so comparing
+// raw transforms with el.style can cause unchanged styles to be written again.
+const styles=new WeakMap();
+const style=(el,key,value)=>{let cache=styles.get(el);if(!cache){cache={};styles.set(el,cache);}if(cache[key]!==value){cache[key]=value;el.style[key]=value;}};
 export class RecordChoreography {
-  constructor(){this.mask=0;this.items=Array.from({length:4},()=>({p:0,v:0,spin:0}));}
+  constructor(){this.mask=0;this.items=Array.from({length:4},()=>({p:0,v:0,spin:0,hand:0,target:0,carrying:false}));}
   step(dt,reduced=false){
     dt=clamp(dt,0,.05);
     this.items.forEach((item,i)=>{
       const target=this.mask>>i&1;
-      if(reduced){item.p=target;item.v=0;item.spin=0;return;}
+      if(reduced){Object.assign(item,{p:target,v:0,spin:0,hand:0,target,carrying:false});return;}
+      if(target!==item.target){item.target=target;item.carrying=true;}
+      // Reach first. During an interrupted carry the hand stays attached and
+      // the existing spring keeps its velocity as its destination changes.
+      item.hand+=((item.carrying?1:0)-item.hand)*(1-Math.exp(-dt*16));
+      if(item.hand<.001&&!item.carrying)item.hand=0;
+      const moving=item.hand>.94||Math.abs(item.v)>1e-6;
       // A small physical spring keeps velocity when a click reverses mid-flight.
-      for(let n=0;n<4;n++){item.v+=((target-item.p)*100-item.v*10)*dt/4;item.p+=item.v*dt/4;}
+      if(moving)for(let n=0;n<4;n++){item.v+=((target-item.p)*100-item.v*10)*dt/4;item.p+=item.v*dt/4;}
       if(Math.abs(item.p-target)<.0005&&Math.abs(item.v)<.002){item.p=target;item.v=0;}
-      if(target)item.spin+=24*dt*smooth((item.p-.82)/.18);
+      if(item.carrying&&Math.abs(item.p-target)<.008&&Math.abs(item.v)<.08)item.carrying=false;
+      if(target)item.spin+=24*dt*smooth((item.p-.98)/.02)*(1-smooth(item.hand/.2));
       else item.spin+=(Math.round(item.spin/360)*360-item.spin)*(1-Math.exp(-dt*8));
     });
     return this.items;
   }
+}
+
+// The generated cutout's actual pinch is at (43%, 7%). Anchor this contact
+// point to the record's lower-right rim, with the wrist outside the artwork.
+export function recordHandPose(d,hand,recordScale=1){
+  // Compensate for the changing disc scale: a person's hand does not shrink
+  // while placing the record on the smaller, more distant platter.
+  const scale=Math.max(.1,recordScale),width=d*.50/scale,height=width*1448/1086;
+  return {width,height,x:d*.84-width*.43,y:d*.84-height*.07+(1-hand)*d*.55/scale,opacity:smooth(hand/.35),angle:(1-hand)*12};
 }
 
 export function deckLayout(pose,w,h,index){
@@ -69,10 +89,12 @@ export function createRecordPlayers(field,discs,prints){
   });
   const arms=decks.map(deck=>{const el=document.createElement('div');el.className='record-arm-plane';el.setAttribute('aria-hidden','true');el.append(deck.querySelector('.record-arm'));field.append(el);return el;});
   const shafts=arms.map(a=>a.querySelector('.record-arm')),lamps=decks.map(d=>d.querySelector('.record-lamp'));
+  const hands=discs.map(()=>{const el=document.createElement('div');el.className='record-hand-plane';el.setAttribute('aria-hidden','true');const img=document.createElement('img');img.alt='';img.draggable=false;el.append(img);field.append(el);return {el,img};});
+  const fireworks=new RecordFireworks();
   let loaded=false,lastSize='',linkKey='',links=[],deckPoses=[],dead=false;
   return {
-    get animating(){return Boolean(choreography.mask)||choreography.items.some(i=>Math.abs(i.p)>.0005||Math.abs(i.v)>.002||Math.abs(i.spin-Math.round(i.spin/360)*360)>.01);},
-    set(mask){choreography.mask=mask;if(mask&&!loaded){decks.forEach(d=>d.querySelector('img').src='/intro-assets/textures/record-player-walnut.png');loaded=true;}},
+    get animating(){return Boolean(choreography.mask)||fireworks.active||choreography.items.some(i=>i.hand>.001||i.carrying||Math.abs(i.p)>.0005||Math.abs(i.v)>.002||Math.abs(i.spin-Math.round(i.spin/360)*360)>.01);},
+    set(mask){fireworks.select(mask);choreography.mask=mask;if(mask&&!loaded){decks.forEach(d=>d.querySelector('img').src='/intro-assets/textures/record-player-walnut.png');hands.forEach(h=>h.img.src='/intro-assets/textures/record-hand.png');loaded=true;}},
     render(poses,w,h,dt,time,state,aim,reduced){
       if(dead)return;const states=choreography.step(dt,reduced);deckPoses=poses.map((p,i)=>deckLayout(p,w,h,i));
       states.forEach((item,i)=>{
@@ -80,16 +102,22 @@ export function createRecordPlayers(field,discs,prints){
         deck.hidden=p<.001;style(deck,'width',d.w+'px');style(deck,'height',d.h+'px');style(deck,'opacity',String(smooth(p/.48)));
         style(deck,'transform',`translate3d(${d.x}px,${d.y+(1-p)*16}px,0) perspective(1600px) rotateX(24deg) scale(${.95+.05*p})`);
         const arm=arms[i];arm.hidden=deck.hidden;for(const key of ['width','height','transform','opacity'])style(arm,key,deck.style[key]);
-        style(shafts[i],'transform',`rotate(${mix(-6,28,smooth((p-.72)/.28))}deg)`);
+        style(shafts[i],'transform',`rotate(${mix(-6,28,smooth((p-.72)/.28)*(1-smooth(item.hand/.3)))}deg)`);
         style(lamps[i],'opacity',String(smooth((p-.8)/.2)));
         const button=discs[i];style(button,'width',poses[i].d+'px');style(button,'height',poses[i].d+'px');
         style(button,'transform',`translate3d(${v.x-poses[i].d/2}px,${v.y-poses[i].d/2}px,0) perspective(1600px) rotateZ(${v.z}deg) rotateY(${v.ry}deg) rotateX(${v.rx}deg) scale(${v.d/poses[i].d})`);
+        const hand=hands[i],hidden=item.hand<.001||reduced;if(hand.el.hidden!==hidden)hand.el.hidden=hidden;
+        if(!hidden){const hp=recordHandPose(poses[i].d,item.hand,v.d/poses[i].d);
+          style(hand.el,'width',button.style.width);style(hand.el,'height',button.style.height);style(hand.el,'transform',button.style.transform);
+          style(hand.img,'width',hp.width+'px');style(hand.img,'height',hp.height+'px');style(hand.img,'transform',`translate3d(${hp.x}px,${hp.y}px,0) rotate(${hp.angle}deg)`);style(hand.img,'opacity',String(hp.opacity));}
+        const grip=item.hand.toFixed(3);if(hand.el.dataset.grip!==grip)hand.el.dataset.grip=grip;
         style(prints[i],'transform',`rotate(${item.spin}deg)`);button.dataset.deployed=p.toFixed(3);button.dataset.spindle=item.spin.toFixed(3);
       });
       const key=`${choreography.mask}:${w}:${h}:${poses.map(p=>p.x).join(',')}`;
       if(key!==linkKey){linkKey=key;const active=recordIndices(choreography.mask);links=active.slice(1).map((id,i)=>recordLink(deckPoses[active[i]],deckPoses[id],poses,h));}
-      canvas.hidden=links.length===0;canvas.dataset.edges=links.map(l=>`${l.from+1}-${l.to+1}${l.skipped?':curve':':straight'}`).join(',');
-      if(!ctx||!links.length){canvas.dataset.notes='0';return;}
+      fireworks.step(dt,reduced);canvas.hidden=links.length===0&&!fireworks.active;canvas.dataset.edges=links.map(l=>`${l.from+1}-${l.to+1}${l.skipped?':curve':':straight'}`).join(',');
+      canvas.dataset.fireworks=String(fireworks.active);canvas.dataset.burstAge=fireworks.age.toFixed(2);canvas.dataset.sparks=String(fireworks.active?(w<700?120:240):0);
+      if(!ctx||canvas.hidden){canvas.dataset.notes='0';return;}
       const ratio=Math.min(1.5,typeof devicePixelRatio==='number'?devicePixelRatio:1,Math.sqrt(1400000/(w*h))),size=`${w}:${h}:${ratio}`;
       if(size!==lastSize){lastSize=size;canvas.width=Math.round(w*ratio);canvas.height=Math.round(h*ratio);canvas.style.width=w+'px';canvas.style.height=h+'px';}
       ctx.setTransform(ratio,0,0,ratio,0,0);ctx.clearRect(0,0,w,h);
@@ -105,9 +133,9 @@ export function createRecordPlayers(field,discs,prints){
           const distance=(n*spacing+(reduced?0:time*34))%link.length,p=linkPoint(link,distance),alpha=Math.min(1,distance/12,(link.length-distance)/12);
           ctx.globalAlpha=opacity*alpha;ctx.fillStyle='#f9f6e7';ctx.lineWidth=3;ctx.strokeStyle='#f5f1dacc';ctx.strokeText(glyphs[n%4],p.x,p.y);ctx.fillStyle='#675333';ctx.fillText(glyphs[n%4],p.x,p.y);
         }
-      }ctx.globalAlpha=1;canvas.dataset.notes=String(total);
+      }ctx.globalAlpha=1;canvas.dataset.notes=String(total);fireworks.draw(ctx,w,h);
     },
     hit(x,y){const rect=field.getBoundingClientRect();x-=rect.left;y-=rect.top;return deckPoses.find(d=>(choreography.mask>>d.index&1)&&x>=d.x&&x<=d.x+d.w&&y>=d.y&&y<=d.y+d.h)?.index;},
-    dispose(){dead=true;decks.forEach(d=>{d.querySelector('img').removeAttribute('src');d.remove();});arms.forEach(a=>a.remove());canvas.width=canvas.height=1;canvas.remove();}
+    dispose(){dead=true;fireworks.dispose();hands.forEach(h=>{h.img.removeAttribute('src');h.el.remove();});decks.forEach(d=>{d.querySelector('img').removeAttribute('src');d.remove();});arms.forEach(a=>a.remove());canvas.width=canvas.height=1;canvas.remove();}
   };
 }

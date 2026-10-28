@@ -1,15 +1,15 @@
 import {RECORD_SCORE} from './record-score.mjs';
 
-const STORAGE_KEY='paperscientist.record-progress.v1';
+const STORAGE_KEY='paperscientist.record-progress.v2';
 // Only an incoming and outgoing decoder may exist. Fifteen combinations do
 // not mean fifteen simultaneous downloads, media elements or decoded buffers.
 export class RecordMusic {
   constructor(ctx,destination,{createAudio=url=>new Audio(url),storage,notify=()=>{},schedule=(fn,ms)=>setTimeout(fn,ms),cancel=id=>clearTimeout(id)}={}){
     this.ctx=ctx;this.destination=destination;this.createAudio=createAudio;this.storage=storage;this.notify=notify;this.schedule=schedule;this.cancel=cancel;
     this.voices=new Map();this.positions={};this.mask=0;this.enabled=false;this.dead=false;
-    try {const saved=JSON.parse(storage?.getItem(STORAGE_KEY)||'{}');for(let i=1;i<16;i++)if(Number.isFinite(saved[i])&&saved[i]>=0)this.positions[i]=saved[i];}catch{}
+    try {const saved=JSON.parse(storage?.getItem(STORAGE_KEY)||'{}'),legacy=JSON.parse(storage?.getItem('paperscientist.record-progress.v1')||'{}');for(let i=1;i<16;i++){const value=saved[RECORD_SCORE[i].slug]??(i<15?legacy[i]:undefined);if(Number.isFinite(value)&&value>=0)this.positions[i]=value;}}catch{}
   }
-  persist(){try{this.storage?.setItem(STORAGE_KEY,JSON.stringify(this.positions));}catch{}}
+  persist(){try{this.storage?.setItem(STORAGE_KEY,JSON.stringify(Object.fromEntries(Object.entries(this.positions).map(([mask,value])=>[RECORD_SCORE[mask].slug,value]))));}catch{}}
   save(v){if(v.ready&&Number.isFinite(v.audio.currentTime))this.positions[v.mask]=v.audio.currentTime;this.persist();}
   fade(v,value){const p=v.gain.gain,now=this.ctx.currentTime;if(p.cancelAndHoldAtTime)p.cancelAndHoldAtTime(now);else {p.cancelScheduledValues(now);p.setValueAtTime(p.value,now);}p.linearRampToValueAtTime(value,now+.38);}
   release(v){this.cancel(v.timer);this.save(v);v.audio.pause();v.abort.abort();v.source.disconnect();v.gain.disconnect();v.audio.removeAttribute('src');v.audio.load();v.audio.remove();this.voices.delete(v.mask);}

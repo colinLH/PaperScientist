@@ -4,7 +4,8 @@ import {readFileSync,existsSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import vm from 'node:vm';
 import {RECORD_SCORE,recordIndices,toggleRecord} from '../paperscientist/static/intro/record-score.mjs';
-import {RecordChoreography,deckLayout,recordPlacement,recordLink,linkPoint} from '../paperscientist/static/intro/record-player.mjs';
+import {RecordChoreography,deckLayout,recordPlacement,recordLink,linkPoint,recordHandPose} from '../paperscientist/static/intro/record-player.mjs';
+import {RecordFireworks} from '../paperscientist/static/intro/record-celebration.mjs';
 import {RecordMusic} from '../paperscientist/static/intro/record-audio.mjs';
 import {discLayout} from '../paperscientist/static/intro/reference-art.mjs';
 
@@ -15,10 +16,34 @@ test('all fifteen order-independent combinations have distinct attributed, local
  for(let mask=1;mask<16;mask++){
   const ids=recordIndices(mask);assert.equal(ids.reduce(toggleRecord,0),mask);assert.equal(ids.toReversed().reduce(toggleRecord,0),mask);
   assert.equal(credits[mask-1].title,RECORD_SCORE[mask].title);assert.equal(credits[mask-1].license,'CC BY 4.0');
-  assert.ok(existsSync(new URL('../paperscientist/static/intro/audio/records/'+String(mask).padStart(2,'0')+'.opus',import.meta.url)));
-  const bytes=readFileSync(new URL('../paperscientist/static/intro/audio/records/'+String(mask).padStart(2,'0')+'.opus',import.meta.url));
+  const path=new URL('../paperscientist/static/intro/'+RECORD_SCORE[mask].url.replace('/intro-assets/',''),import.meta.url);
+  assert.ok(existsSync(path));
+  const bytes=readFileSync(path);
   assert.equal(createHash('sha256').update(bytes).digest('hex'),credits[mask-1].sha256);
  }
+});
+
+test('hand reaches the rim before lifting, remains attached during reversal and withdraws before spinning',()=>{
+ const c=new RecordChoreography();c.mask=1;for(let n=0;n<3;n++)c.step(.033);
+ assert.equal(c.items[0].p,0);assert.ok(c.items[0].hand>.5);
+ for(let n=0;n<9;n++)c.step(.033);
+ assert.ok(c.items[0].p>0&&c.items[0].hand>.94);assert.equal(c.items[0].spin,0);
+ const before={...c.items[0]};c.mask=0;c.step(.01);assert.ok(Math.abs(c.items[0].p-before.p)<.1);assert.ok(c.items[0].hand>.9);
+ for(let n=0;n<300;n++)c.step(.033);assert.equal(c.items[0].p,0);assert.equal(c.items[0].hand,0);
+ c.mask=15;for(let n=0;n<150;n++)c.step(.033);assert.ok(c.items.every(i=>i.p===1&&i.hand===0&&i.spin>0));
+ for(const d of [90,320,940])for(const scale of [.45,.7,1]){const p=recordHandPose(d,1,scale);assert.ok(Math.abs(p.x+p.width*.43-d*.84)<1e-8);assert.ok(Math.abs(p.y+p.height*.07-d*.84)<1e-8);assert.ok(Math.abs(p.width*scale-d*.5)<1e-8);assert.equal(recordHandPose(d,0).opacity,0);}
+ c.mask=0;c.step(.03,true);assert.ok(c.items.every(i=>i.hand===0&&i.p===0));
+});
+
+test('four-disc celebration fires once, expires, stays bounded during repeated clicks and respects reduced motion',()=>{
+ const f=new RecordFireworks();for(const mask of [1,3,7]){f.select(mask);f.step(.05);assert.equal(f.active,false);}
+ f.select(15);f.step(.05);assert.equal(f.bursts,1);assert.equal(f.active,true);
+ let strokes=0;const ctx={save(){},restore(){},beginPath(){},moveTo(){},lineTo(){},stroke(){strokes++;}};
+ for(let n=0;n<20;n++){f.select(7);f.select(15);f.step(.05);strokes=0;f.draw(ctx,3840,2160);assert.ok(strokes<=240);}
+ assert.equal(f.bursts,1);for(let n=0;n<90;n++)f.step(.05);assert.equal(f.active,false);strokes=0;f.draw(ctx,3840,2160);assert.equal(strokes,0);
+ f.select(7);f.select(15);f.step(.05,true);assert.equal(f.active,false);assert.equal(f.bursts,1);
+ f.dispose();assert.equal(f.pending,false);
+ const cancelled=new RecordFireworks();cancelled.select(15);cancelled.select(7);cancelled.step(.05);assert.equal(cancelled.active,false);assert.equal(cancelled.bursts,0);
 });
 
 test('records start still, land before spinning, reverse mid-flight continuously and settle back',()=>{
@@ -93,6 +118,12 @@ test('load failures latch until explicit retry and preserve saved progress befor
  assert.equal(f.events.at(-1)[0],'error');assert.equal(f.music.voices.size,0);assert.equal(f.music.positions[4],81);
  for(let i=0;i<30;i++)f.music.set(4);assert.equal(f.elements.length,1);
  f.block(false);f.music.set(4,false);f.music.set(4,true);await Promise.resolve();f.elements.at(-1).emit('loadedmetadata');assert.equal(f.elements.at(-1).currentTime,81);f.music.dispose();
+});
+
+test('music upgrade retains fourteen positions without seeking the new finale to the old track time',async()=>{
+ const f=fixture({'paperscientist.record-progress.v1':'{"1":25,"15":173}'});assert.equal(f.music.positions[1],25);assert.equal(f.music.positions[15],undefined);
+ f.music.set(15);await Promise.resolve();const a=f.elements.at(-1);a.emit('loadedmetadata');assert.equal(a.currentTime,0);a.currentTime=38;f.music.dispose();
+ const restored=new RecordMusic(f.ctx,{},f.options);assert.equal(restored.positions[15],38);assert.equal(restored.positions[1],25);restored.dispose();
 });
 
 test('browser timer defaults do not receive the music controller as a native receiver',async()=>{
