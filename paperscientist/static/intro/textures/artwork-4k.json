@@ -1,0 +1,79 @@
+{
+  "assets": [
+    {
+      "path": "disc-pagoda-4k.webp",
+      "size": [
+        3840,
+        2160
+      ],
+      "bytes": 2843354,
+      "sha256": "1dea41ac23f5153a78ce9761924a8d19416d6a81c2601edb6588205b043108ef",
+      "native_4k": false,
+      "method": "reference-guided AI reconstruction of user figure1.jpg, then local super-resolution",
+      "source_size": [
+        1672,
+        941
+      ],
+      "source_sha256": "222d5eac12623526c971b535821442fc764b64d486a460d038af2b61a4b29f3d",
+      "intermediate_size": [
+        6688,
+        3764
+      ]
+    },
+    {
+      "path": "disc-milky-way-4k.webp",
+      "size": [
+        3840,
+        2560
+      ],
+      "bytes": 2170908,
+      "sha256": "2b57ef729afb4e64371c8b42ea8017f44e24063daaa413c08722f187d6dfa82e",
+      "native_4k": false,
+      "method": "reference-guided AI reconstruction of user Milky Way image, then local super-resolution",
+      "source_size": [
+        1536,
+        1024
+      ],
+      "source_sha256": "133e3ba063ff5818a23b7b43f302f810592d294e0fdac4775dcd3624341f8553",
+      "intermediate_size": [
+        6144,
+        4096
+      ]
+    },
+    {
+      "path": "garden-reference-4k.webp",
+      "size": [
+        3840,
+        2160
+      ],
+      "bytes": 3207926,
+      "sha256": "408427bd85837b83f2df960dc218da19aa17c64ec00481b61282b03fa8c1cad9",
+      "native_4k": false,
+      "method": "direct local super-resolution of the unchanged garden composition",
+      "source_size": [
+        1672,
+        941
+      ],
+      "source_sha256": "906bebc3a112fbe057ed6ede7df3eedc91c1123ffa4f4adf0c5b7340d048dea9",
+      "intermediate_size": [
+        6688,
+        3764
+      ]
+    }
+  ],
+  "super_resolution": {
+    "tool": "Real-ESRGAN ncnn Vulkan",
+    "release": "20220424",
+    "model": "realesrgan-x4plus",
+    "scale": 4,
+    "tile_size": 256,
+    "threads": "1:1:1",
+    "model_sha256": "713ee713b0353afaa27976f0563a64a5043bd70b9bd8936c2e26e25ebcdbcddf"
+  },
+  "export": {
+    "format": "WebP",
+    "quality": 96,
+    "fit": "center crop, Lanczos"
+  },
+  "runtime": "Static prebuilt image assets; no model inference in browser."
+}

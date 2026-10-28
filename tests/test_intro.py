@@ -29,7 +29,7 @@ class IntroTests(unittest.TestCase):
             self.assertEqual(r.content, b'\x00asm')
             self.assertIn('application/wasm', r.headers['content-type'])
             self.assertEqual(c.get('/intro-assets/hand-worker.js').status_code, 200)
-            for asset in ('journey-map.mjs', 'gravity.mjs', 'cosmic-art.mjs', 'reference-art.mjs', 'garden-atmosphere.mjs', 'prelude-interaction.mjs', 'earth-data.mjs', 'earth-geometry.mjs', 'earth-globe.mjs', 'constellation.js', 'warp.js', 'work.js', 'work-layout.mjs', 'paper-previews.mjs', 'immersive.css', 'work/atlas.svg', 'work/paper.svg', 'textures/disc-pagoda.webp', 'textures/disc-pastoral.webp', 'textures/disc-milky-way.webp'):
+            for asset in ('journey-map.mjs', 'gravity.mjs', 'cosmic-art.mjs', 'reference-art.mjs', 'garden-atmosphere.mjs', 'prelude-interaction.mjs', 'earth-data.mjs', 'earth-geometry.mjs', 'earth-globe.mjs', 'constellation.js', 'warp.js', 'work.js', 'work-layout.mjs', 'paper-previews.mjs', 'immersive.css', 'work/atlas.svg', 'work/paper.svg', 'textures/disc-pagoda-4k.webp', 'textures/disc-pastoral.webp', 'textures/disc-milky-way-4k.webp', 'textures/garden-reference-4k.webp'):
                 r = c.get('/intro-assets/' + asset)
                 self.assertEqual(r.status_code, 200, asset)
                 if asset.endswith('.svg'):

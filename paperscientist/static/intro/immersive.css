@@ -104,6 +104,8 @@
 .garden-scene,.garden-plate{position:absolute;inset:0;overflow:hidden}
 .garden-plate{will-change:transform;transform-origin:center}
 .garden-plate img,.garden-plate canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.garden-canopy{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.garden-canopy-patch{position:absolute;background-repeat:no-repeat;will-change:transform;mask-image:linear-gradient(90deg,transparent,#000 12% 80%,transparent),linear-gradient(transparent,#000 12% 72%,transparent);mask-composite:intersect}
 #journey[data-prelude=true]:is([data-scene="0"],[data-scene="2"]) {color:#1b211d}
 #journey[data-prelude=true]:is([data-scene="0"],[data-scene="2"]) .wordmark{color:#171e1a;text-shadow:none}
 #journey[data-prelude=true]:is([data-scene="0"],[data-scene="2"]) .wordmark svg{filter:none}
@@ -151,4 +153,4 @@
  #journey[data-scene="2"][data-prelude=true] #prelude-tools{left:7%;right:7%;width:auto;bottom:9%;padding:10px 8px 0;font-size:10px}
  #journey[data-scene="2"][data-prelude=true] #prelude-selection{font-size:10px}#journey[data-scene="2"][data-prelude=true] footer{left:7%;right:7%;bottom:14px}
 }
-@media(prefers-reduced-motion:reduce){.research-disc,.garden-plate{will-change:auto}}
+@media(prefers-reduced-motion:reduce){.research-disc,.garden-plate,.garden-canopy-patch{will-change:auto}}
