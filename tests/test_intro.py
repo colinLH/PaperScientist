@@ -22,6 +22,13 @@ class IntroTests(unittest.TestCase):
             r = c.get('/intro-assets/audio/hiraeth.mp3', headers={'range':'bytes=0-99'})
             self.assertEqual(r.status_code, 206)
             self.assertEqual(len(r.content), 100)
+            for mask in range(1, 16):
+                r = c.get(f'/intro-assets/audio/records/{mask:02}.opus', headers={'range': 'bytes=0-99'})
+                self.assertEqual(r.status_code, 206)
+                self.assertEqual(r.content[:4], b'OggS')
+                self.assertIn('audio/ogg', r.headers['content-type'])
+            for asset in ('record-player.mjs', 'record-audio.mjs', 'record-score.mjs', 'textures/record-player-walnut.png'):
+                self.assertEqual(c.get('/intro-assets/' + asset).status_code, 200)
             # Browser workers and WASM must work from the same local origin,
             # without a CDN or frontend package manager at runtime.
             r = c.get('/intro-assets/vendor/mediapipe/wasm/vision_wasm_internal.wasm', headers={'range': 'bytes=0-3'})

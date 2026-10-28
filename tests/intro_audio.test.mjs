@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {musicGains} from '../paperscientist/static/intro/motion.mjs';
+import {RecordMusic} from '../paperscientist/static/intro/record-audio.mjs';
 
 function fixture(){
   let blocked=false,resolvePlay=null;
@@ -19,8 +20,8 @@ function fixture(){
     createGain(){return gain();} createMediaElementSource(){return gain();}
     resume(){return Promise.resolve();} suspend(){} close(){}
   }
-  const source=readFileSync(new URL('../paperscientist/static/intro/audio.js',import.meta.url),'utf8').replace(/^import.*\n/,'').replace('export class Soundscape','class Soundscape');
-  const Soundscape=vm.runInNewContext(source+'\nSoundscape;', {musicGains,window:{AudioContext},Audio,document:{body:{append(){}}},setTimeout(){return 1;},clearTimeout(){}});
+  const source=readFileSync(new URL('../paperscientist/static/intro/audio.js',import.meta.url),'utf8').replace(/^import.*\n/gm,'').replace('export class Soundscape','class Soundscape');
+  const Soundscape=vm.runInNewContext(source+'\nSoundscape;', {musicGains,RecordMusic,window:{AudioContext},Audio,document:{body:{append(){}}},setTimeout(){return 1;},clearTimeout(){}});
   const sound=new Soundscape(button,{});
   return {sound,button,block(value){blocked=value;},defer(){resolvePlay=[];return ()=>{resolvePlay.forEach(fn=>fn());resolvePlay=null;};}};
 }

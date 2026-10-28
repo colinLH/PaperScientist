@@ -97,11 +97,28 @@
 .research-disc[data-print=milky-way] .disc-print{background-position:50% center;background-color:#11191d}
 .research-disc[data-print=milky-way] .disc-label{top:27%;font-size:clamp(40px,4vw,90px)}
 .research-disc[data-print=garden] .disc-print{background-position:62% center}
-.research-disc[data-print=garden] .disc-label{display:none}.research-disc[data-print=garden] .disc-edition{bottom:7%;background:#f3ede5cc;color:#272b21;padding:7px 0;font-size:13px}
+.research-disc[data-print=garden] .disc-label{display:block;color:#fff8ed;font-size:clamp(25px,3.3vw,62px);text-shadow:0 2px 2px #30271c,0 0 18px #33281888}.research-disc[data-print=garden] .disc-edition{bottom:7%;background:#f3ede5cc;color:#272b21;padding:7px 0;font-size:13px}
 .research-disc[data-print=landscape] .disc-print{background-position:70% center}
 .disc-editorial{position:absolute;z-index:3;left:35%;right:20%;bottom:.8%;display:flex;justify-content:space-between;gap:30px;text-align:center;pointer-events:none}
 .disc-editorial p{margin:0;font:400 clamp(17px,1.4vw,25px)/1.3 Georgia,'SimSun',serif;letter-spacing:-.03em}
 .disc-editorial small{display:block;font:9px/2.8 'Segoe UI','Microsoft YaHei',sans-serif;letter-spacing:.14em}
+.record-deck,.record-arm-plane{position:absolute;left:0;top:0;transform-origin:42.3% 47.8%;pointer-events:none;will-change:transform,opacity}
+.record-arm-plane{z-index:3}.record-arm-plane[hidden]{display:none}
+.record-deck>img{width:100%;height:100%;display:block;filter:drop-shadow(0 12px 9px #18110824)}
+.record-deck[hidden],.record-links[hidden],.record-now[hidden],.disc-editorial[hidden]{display:none}
+.record-arm{position:absolute;left:82.3%;top:27%;width:3%;height:48%;transform-origin:50% 0;z-index:4;filter:drop-shadow(2px 3px 2px #0008)}
+.arm-shaft{position:absolute;width:42%;height:94%;left:29%;top:0;border-radius:5px;background:linear-gradient(90deg,#3f4445,#d2d4d3 22%,#fff 43%,#939a9a 68%,#343b3b);border:1px solid #a5aaa8}
+.arm-counterweight{position:absolute;width:180%;height:12%;left:-40%;top:-12%;border-radius:3px;background:linear-gradient(90deg,#3a3b39,#f0f0eb 40%,#777d7c 65%,#292d2b);box-shadow:0 1px 2px #0008}
+.arm-head{position:absolute;width:160%;height:17%;left:-28%;bottom:-2%;border-radius:2px;background:linear-gradient(90deg,#252724,#444943 45%,#0e1411);border-bottom:2px solid #d3b57d}
+.record-lamp{position:absolute;width:1.7%;height:2%;left:90%;top:78%;border-radius:50%;background:#ffc970;box-shadow:0 0 8px 3px #ffbb4366}
+.record-links{position:absolute;inset:0;pointer-events:none;z-index:1}
+.research-disc{z-index:2}
+.record-deck .record-arm{z-index:4}
+.record-now{position:absolute;left:25%;right:25%;top:13%;text-align:center;pointer-events:none;color:#494839}
+.record-now>span{display:block;font:10px/1.8 'Segoe UI',sans-serif;letter-spacing:.19em;color:#857452}
+.record-now>strong{display:block;font:italic 24px/1.25 Georgia,serif;margin:3px 0 6px}
+.record-now>small{font-size:10px;color:#7b796f}
+#record-audio-status{display:block;margin-top:4px}
 .garden-scene,.garden-plate{position:absolute;inset:0;overflow:hidden}
 .garden-plate{will-change:transform;transform-origin:center}
 .garden-plate img,.garden-plate canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
@@ -144,6 +161,8 @@
 #journey[data-scene="2"][data-prelude=true] header .wordmark,#journey[data-scene="2"][data-prelude=true] .header-actions{background:#f3f3e9dc;padding:8px 10px}
 @media(max-width:700px){
  .disc-label{font-size:clamp(10px,2.8vw,16px)}.research-disc[data-print=milky-way] .disc-label{font-size:clamp(12px,4vw,20px)}.disc-edition{display:none}
+ .research-disc[data-print=garden] .disc-label{font-size:clamp(10px,2.8vw,16px)}
+ .record-now{top:31%;left:6%;right:6%}.record-now>strong{font-size:18px}.record-now>span{font-size:8px}.record-now>small{font-size:9px}
  .disc-gallery{inset:10% 5% 12%}.disc-record{top:15px;left:12px;width:69%;max-width:260px}.disc-record h1{font-size:27px}.disc-record dl{font-size:10px}.disc-record dt{font-size:9px}.disc-record dl>div{padding:3px 0}
  .garden-plate img{object-position:62% center}
  .disc-editorial{left:12%;right:12%;bottom:2%;gap:14px}.disc-editorial p{font-size:12px}.disc-editorial small{font-size:8px;line-height:2}

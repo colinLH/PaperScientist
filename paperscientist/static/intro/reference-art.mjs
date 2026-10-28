@@ -1,6 +1,8 @@
 import {clamp,smooth} from './motion.mjs';
 import {createGardenAtmosphere,createGardenCanopy} from './garden-atmosphere.mjs?v=4';
 import {createGardenPond,pondLeafPose} from './garden-pond.mjs?v=2';
+import {createRecordPlayers} from './record-player.mjs';
+import {RECORD_SCORE,recordIndices,toggleRecord} from './record-score.mjs';
 
 export const referenceOpacity=p=>p<1?1-smooth((p-.12)/.65):smooth((p-1.18)/.66)*(1-smooth((p-2.28)/.5));
 export const records=[
@@ -17,13 +19,6 @@ export function discLayout(w,h,index,yaw=0,time=0,reduced=false){
   const pan=clamp(yaw*w*.13,-d*.22,d*.22);
   return {x:edge+index*step+pan,y:h*(narrow?.59:.60)+(reduced?0:Math.sin(time*.18)*h*.006),d,angle:-24};
 }
-export function discTransforms(pose,state,aim,time,reduced=false){
-  const y=24+clamp(state.yaw,-1.8,1.8)*10+(reduced?0:aim.x*3);
-  const x=-9+clamp(state.pitch,-.85,.85)*18+(reduced?0:aim.y*2);
-  return {plane:`translate3d(${pose.x-pose.d/2}px,${pose.y-pose.d/2}px,0) perspective(1600px) rotateZ(${pose.angle}deg) rotateY(${y}deg) rotateX(${x}deg)`,
-    // Spin the print inside the tilted plane, never around the screen's Z axis.
-    spindle:`rotate(${reduced?0:(time*3)%360}deg)`};
-}
 export function imageCover(iw,ih,w,h,focus=.5){const scale=Math.max(w/iw,h/ih);return {x:(iw-w/scale)*clamp(focus,0,1),y:(ih-h/scale)/2,w:w/scale,h:h/scale};}
 export class WaterRipples{
   constructor(){this.items=[];}
@@ -31,34 +26,42 @@ export class WaterRipples{
   tick(dt,reduced){if(reduced){this.items=[];return;}this.items.forEach(p=>p.age+=clamp(dt,0,.1));this.items=this.items.filter(p=>p.age<2.5);}
 }
 
-export function createReferenceArt(host,wake){
+export function createReferenceArt(host,wake,{onPlaybackChange=()=>{}}={}){
   host.innerHTML=`<section class="disc-gallery" aria-label="研究灵感唱片集">
     <div class="disc-record"><h1>从一个问题<br>走向多种可能。</h1><dl><div><dt>研究起点</dt><dd>你的好奇心</dd></div><div><dt>正在浏览</dt><dd data-record-name>方向</dd></div><div><dt>下一步</dt><dd data-record-note>比较不同解释，留下值得验证的假设。</dd></div></dl></div>
     <div class="disc-field"></div><div class="disc-editorial"><p><small>阅读与关联</small>“沿着线索，<br>发现新的联系。”</p><p><small>提问与判断</small>“让值得追问的问题，<br>成为研究的起点。”</p></div>
+    <div class="record-now" hidden><span data-record-combination></span><strong data-record-track role="status" aria-live="polite"></strong><small>再点唱片收回 · 进度自动保留</small><small id="record-audio-status" aria-live="off"></small></div>
   </section><section class="garden-scene" aria-label="山水研究庭院" hidden><div class="garden-plate"><img src="/intro-assets/textures/garden-reference-4k.webp" alt="红色古塔与庭院、拱桥、秋色树林和山间溪水的绘画"/><div class="garden-canopy" aria-hidden="true"></div><canvas aria-hidden="true"></canvas></div></section>`;
   const gallery=host.querySelector('.disc-gallery'),field=host.querySelector('.disc-field'),garden=host.querySelector('.garden-scene'),plate=host.querySelector('.garden-plate'),img=plate.querySelector('img'),canvas=plate.querySelector('canvas'),ctx=canvas.getContext('2d',{alpha:true});
   const pond=createGardenPond(),atmosphere=createGardenAtmosphere({leafPose:pondLeafPose}),canopy=createGardenCanopy(plate.querySelector('.garden-canopy'),img),name=host.querySelector('[data-record-name]'),note=host.querySelector('[data-record-note]'),ripples=new WaterRipples(),abort=new AbortController();
-  let dead=false,stage=0,selected=2,w=1,h=1,lastTime=null,lastRatio='',frames=0,waterFeedback=false,pondTime=0;
+  let dead=false,stage=0,selected=2,w=1,h=1,lastTime=null,lastRatio='',frames=0,waterFeedback=false,pondTime=0,playing=0;
   const discs=records.map((record,index)=>{
-    const button=document.createElement('button');button.className='research-disc';button.dataset.print=record.style;button.setAttribute('aria-label','选择'+record.name+'唱片');button.setAttribute('aria-pressed',String(index===selected));
+    const button=document.createElement('button');button.className='research-disc';button.dataset.print=record.style;button.setAttribute('aria-label','播放'+record.name+'唱片');button.setAttribute('aria-pressed','false');
     button.innerHTML=`<span class="disc-print" style="background-image:url('/intro-assets/textures/${record.image}')"><span class="disc-label">${record.title.replace('\n','<br>')}</span><span class="disc-edition">PaperScientist / ${record.name}</span></span><span class="disc-hub"></span>`;
     // Pointer selection is handled by the shared drag/tap surface; keyboard clicks
     // retain a normal button action without turning a drag into an accidental click.
     button.addEventListener('click',e=>{if(e.detail===0)choose(index);},{signal:abort.signal});field.append(button);return button;
   });
   const prints=discs.map(d=>d.querySelector('.disc-print'));
+  const players=createRecordPlayers(field,discs,prints),now=host.querySelector('.record-now'),editorial=host.querySelector('.disc-editorial');
   img.addEventListener('load',wake,{signal:abort.signal});img.addEventListener('error',()=>{garden.dataset.unavailable='true';wake();},{signal:abort.signal});
-  function choose(i){selected=i;name.textContent=records[i].name;note.textContent=records[i].note;discs.forEach((d,j)=>d.setAttribute('aria-pressed',String(j===i)));wake();}
+  function choose(i){
+    selected=i;playing=toggleRecord(playing,i);name.textContent=records[i].name;note.textContent=records[i].note;
+    discs.forEach((d,j)=>{const active=Boolean(playing&(1<<j));d.setAttribute('aria-pressed',String(active));d.setAttribute('aria-label',(active?'收回':'播放')+records[j].name+'唱片');});
+    players.set(playing);now.hidden=!playing;editorial.hidden=Boolean(playing);gallery.dataset.playing=String(playing);host.dataset.playing=String(playing);
+    if(playing){host.querySelector('[data-record-combination]').textContent=recordIndices(playing).map(j=>String(j+1).padStart(2,'0')).join(' + ')+' / '+(recordIndices(playing).length>1?'COMPOSITION':'NOW PLAYING');host.querySelector('[data-record-track]').textContent=RECORD_SCORE[playing].title;}
+    onPlaybackChange(playing);wake();
+  }
   function water(x=.62,y=.84){ripples.add(x,y);waterFeedback=true;wake();}
   function hide(){host.hidden=true;lastTime=null;ripples.items=[];}
-  return {get available(){return !dead;},hide,
+  return {get available(){return !dead;},get animating(){return stage!==0||players.animating;},hide,
     render({p,time,state,aim,w:width,h:height,reduced}){
       if(dead)return [];const alpha=referenceOpacity(p);if(alpha<.001){hide();return [];}
       w=width;h=height;stage=p<1?0:2;host.hidden=false;host.style.opacity=String(alpha);host.dataset.art=stage===0?'printed-disc-gallery':'painted-garden';gallery.hidden=stage!==0;garden.hidden=stage!==2;
       const dt=lastTime===null?0:Math.min(.1,Math.max(0,time-lastTime));lastTime=time;const t=reduced?0:time;
       if(stage===0){
         const fw=w*.90,fh=h*.78;
-        discs.forEach((disc,i)=>{const v=discLayout(fw,fh,i,state.yaw,t,reduced),transform=discTransforms({...v,central:i===2},state,aim,t,reduced);if(disc.style.width!==v.d+'px')disc.style.width=disc.style.height=v.d+'px';disc.style.transform=transform.plane;prints[i].style.transform=transform.spindle;});
+        players.render(discs.map((_,i)=>discLayout(fw,fh,i,state.yaw,0,true)),fw,fh,dt,t,state,aim,reduced);
       }else{
         if(!reduced)pondTime+=dt;const gardenTime=reduced?0:pondTime;
         const ratio=Math.min(devicePixelRatio||1,1.5,Math.sqrt(1400000/(w*h))),key=w+':'+h+':'+ratio;
@@ -84,10 +87,10 @@ export function createReferenceArt(host,wake){
       }
       frames++;host.dataset.frames=String(frames);host.dataset.selected=String(selected);host.dataset.ripples=String(ripples.items.length);host.dataset.motion=t.toFixed(3);host.dataset.yaw=state.yaw.toFixed(3);return [];
     },
-    tap(x,y){if(stage===2){if(y/h>=.70)water(x/w,y/h);return;}const available=discs.map((el,i)=>({i,rect:el.getBoundingClientRect()}));const inside=available.filter(({rect:r})=>x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom);if(inside.length)choose(inside.at(-1).i);},
-    activate(){if(stage===0)choose((selected+1)%records.length);else water();},
-    reset(){choose(2);ripples.items=[];waterFeedback=false;},
-    get info(){return stage===0?{help:'拖动唱片集 · 点击切换研究线索',action:'浏览下一张',selection:records[selected].line}:{help:'移动欣赏园林 · 点击水面泛起涟漪',action:'轻点水面',selection:waterFeedback?'涟漪渐息，让想法慢慢沉淀。':''};},
-    dispose(){dead=true;abort.abort();ripples.items=[];pond.dispose();atmosphere.dispose();canopy.dispose();img.removeAttribute('src');canvas.width=canvas.height=1;host.replaceChildren();host.hidden=true;}
+    tap(x,y){if(stage===2){if(y/h>=.70)water(x/w,y/h);return;}const available=discs.map((el,i)=>({i,rect:el.getBoundingClientRect()}));const inside=available.filter(({rect:r})=>x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom);if(inside.length)choose(inside.at(-1).i);else {const hit=players.hit(x,y);if(hit!==undefined)choose(hit);}},
+    activate(){if(stage===0)choose(selected);else water();},
+    reset(){ripples.items=[];waterFeedback=false;wake();},
+    get info(){return stage===0?{help:'拖动调整视角 · 点击播放，多选发现组合乐曲',action:(playing&(1<<selected)?'收回':'播放')+records[selected].name+'唱片',selection:records[selected].line}:{help:'移动欣赏园林 · 点击水面泛起涟漪',action:'轻点水面',selection:waterFeedback?'涟漪渐息，让想法慢慢沉淀。':''};},
+    dispose(){dead=true;abort.abort();players.dispose();ripples.items=[];pond.dispose();atmosphere.dispose();canopy.dispose();img.removeAttribute('src');canvas.width=canvas.height=1;host.replaceChildren();host.hidden=true;}
   };
 }

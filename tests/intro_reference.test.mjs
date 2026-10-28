@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {discLayout,discTransforms,imageCover,WaterRipples,referenceOpacity} from '../paperscientist/static/intro/reference-art.mjs';
+import {discLayout,imageCover,WaterRipples,referenceOpacity} from '../paperscientist/static/intro/reference-art.mjs';
 import {createPrelude} from '../paperscientist/static/intro/cosmic-art.mjs';
 
 test('disc layout keeps one equally sized row, bounded drag and a stable reduced-motion pose',()=>{
@@ -25,14 +25,6 @@ test('gallery uses the former second-disc diameter, uniform gaps and narrow drag
   assert.ok(discLayout(w,h,0,1.8).x-d*.47>=0);
   assert.ok(discLayout(w,h,3,-1.8).x+d*.47<=w);
  }
-});
-test('record rotation stays inside the tilted plane, with a two-minute revolution and reduced-motion stop',()=>{
- const pose={...discLayout(1152,562,2,0,0,true),central:true},state={yaw:.4,pitch:.3},aim={x:0,y:0};
- const a=discTransforms(pose,state,aim,0),b=discTransforms(pose,state,aim,40);
- assert.equal(a.plane,b.plane);assert.equal(a.spindle,'rotate(0deg)');assert.equal(b.spindle,'rotate(120deg)');
- assert.equal(discTransforms(pose,state,aim,120).spindle,'rotate(0deg)');
- const tilted=discTransforms(pose,{yaw:1,pitch:-.5},aim,40);assert.notEqual(tilted.plane,b.plane);assert.equal(tilted.spindle,b.spindle);
- assert.equal(discTransforms(pose,state,aim,40,true).spindle,'rotate(0deg)');
 });
 test('panoramic image cover stays in bounds at narrow and wide aspect ratios',()=>{
  for(const [w,h] of [[390,844],[2157,1244],[3840,2160]]){const c=imageCover(1672,941,w,h);assert.ok(c.x>=0&&c.y>=0&&c.x+c.w<=1672.0001&&c.y+c.h<=941.0001);assert.ok(Math.abs(c.w/c.h-w/h)<1e-10);}

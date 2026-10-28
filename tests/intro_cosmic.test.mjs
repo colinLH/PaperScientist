@@ -61,3 +61,13 @@ test('sparse atlas spans all four quadrants without recreating the old dense net
  assert.ok(Math.min(...x)<-.85&&Math.max(...x)>.85&&Math.min(...y)<-.7&&Math.max(...y)>.8);
  for(const sx of [-1,1])for(const sy of [-1,1])assert.ok(x.some((v,i)=>v*sx>.3&&y[i]*sy>.3));atlas.dispose();
 });
+
+test('an opaque stationary gallery suspends covered canvas work and idle animation',()=>{
+ Object.assign(globalThis,{innerWidth:1280,innerHeight:720,devicePixelRatio:1});
+ let draws=0,frames=0;const ctx=new Proxy({},{get:()=>()=>{draws++;return {addColorStop(){}};}}),canvas={getContext:()=>ctx,style:{},dataset:{}};
+ const art=createPrelude(canvas),studio={available:true,animating:false,render(){frames++;return [];},hide(){},dispose(){}};
+ art.attachReference(studio);art.render(0,0);art.render(0,1);
+ assert.equal(draws,0);assert.equal(frames,2);assert.equal(canvas.hidden,true);assert.equal(art.animating,false);
+ studio.animating=true;assert.equal(art.animating,true);studio.animating=false;
+ art.render(.5,2);assert.ok(draws>0);assert.equal(art.animating,true);art.dispose();
+});

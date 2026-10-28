@@ -1,13 +1,14 @@
 import {Journey} from './motion.mjs';
-import {Soundscape} from './audio.js?v=2';
-import {createPrelude,preludeOpacity} from './cosmic-art.mjs?v=15';
+import {Soundscape} from './audio.js?v=3';
+import {createPrelude,preludeOpacity} from './cosmic-art.mjs?v=16';
 import {CITIES} from './earth-data.mjs';
 import {bindPreludeInput} from './prelude-interaction.mjs?v=3';
 import {LAST_STOP,chapterStops,journeyFrame} from './journey-map.mjs';
 import {createWarp} from './warp.js';
 import {createWork} from './work.js?v=2';
 import {workSpring} from './work-layout.mjs?v=2';
-import {createClosingLandscape} from './closing-landscape.mjs?v=3';
+import {createClosingLandscape} from './closing-landscape.mjs?v=4';
+import {RECORD_SCORE,recordIndices} from './record-score.mjs';
 
 const chapters=[
   {name:'研究灵感集',label:'从一个问题出发',title:'从一个问题，\n走向多种可能。',description:'观察、阅读、判断，让每一个线索都有继续探索的可能。'},
@@ -20,8 +21,13 @@ const chapters=[
 ];
 const root=document.querySelector('#journey'),host=document.querySelector('#landscape'),copy=document.querySelector('#copy'),nav=document.querySelector('#chapters'),veil=document.querySelector('#valley-mist');
 const previous=document.querySelector('#previous'),next=document.querySelector('#next'),start=document.querySelector('#start'),credits=document.querySelector('#credits');
-const reduced=matchMedia('(prefers-reduced-motion: reduce)'),journey=new Journey(LAST_STOP),audio=new Soundscape(document.querySelector('#sound'),document.querySelector('#sound-status'));
+const recordCredits=document.querySelector('#record-credits');
+for(const track of RECORD_SCORE.filter(Boolean)){const li=document.createElement('li'),link=document.createElement('a');li.append(recordIndices(track.mask).map(i=>i+1).join(' + ')+'：');link.href=track.page;link.textContent=track.title;link.target='_blank';link.rel='noopener';li.append(link);recordCredits.append(li);}
+// Full-motion diagnostics are explicit and never change the visitor's preference.
+const reduced=new URLSearchParams(location.search).get('profile')==='motion'?{matches:false,addEventListener(){}}:matchMedia('(prefers-reduced-motion: reduce)'),journey=new Journey(LAST_STOP),audio=new Soundscape(document.querySelector('#sound'),document.querySelector('#sound-status'));
 let scene=null,hands=null,frame=0,last=0,shown=0,dead=false,leaving=false,drawn=-1,resizeTimer=0,nextPaint=0,lastLandscapePaint=0;
+let profiler=null;
+if(new URLSearchParams(location.search).has('profile'))import('./performance-probe.mjs').then(({createPerformanceProbe})=>{if(!dead)profiler=createPerformanceProbe();});
 const prelude=createPrelude(document.querySelector('#prelude-canvas'));
 const closing=createClosingLandscape(document.querySelector('#closing-landscape'),wake);
 const interactionSurface=document.querySelector('#prelude-interaction'),interactionTools=document.querySelector('#prelude-tools');
@@ -53,18 +59,18 @@ function paint(now=performance.now(),dt=1/30){
   hands?.setActive(Math.abs(p-4)<.45&&!credits.open&&!document.hidden&&!leaving);
   hands?.render(now/1000,state.star);
   warp.render(p,state.warp,dt,reduced.matches);work.render(state,now/1000,dt,reduced.matches);warpControls.hidden=state.warp<.9;
-  audio.update(state.music);drawn=p;
+  audio.setRecords(Number(document.querySelector('#reference-art').dataset.playing||0),p<.6);audio.update(state.music);drawn=p;
 }
 function fastWork(){return journey.value>4.6&&journey.value<9.7||journey.target>=5&&journey.target<=9;}
-function tick(now){frame=0;if(dead||document.hidden||credits.open)return;const fast=fastWork(),interval=1000/(fast&&journey.moving?60:30);if(now+.25<nextPaint){frame=requestAnimationFrame(tick);return;}nextPaint=nextPaint&&now-nextPaint<50?nextPaint+interval:now+interval;const dt=last?Math.min((now-last)/1000,.08):1/60;last=now;journey.tick(dt,fast?workSpring(journey.value,journey.target):5);paint(now,dt);if(journey.moving||ambient())schedule();else{last=nextPaint=0;data(root,'renderState','idle');}}
-function ambient(){return !leaving&&(journeyFrame(journey.value).work<.999&&!reduced.matches||hands?.moving||work.animating);}
+function tick(now){profiler?.tick(now);frame=0;if(dead||document.hidden||credits.open)return;const fast=fastWork(),interval=1000/(fast&&journey.moving?60:30);if(now+.25<nextPaint){frame=requestAnimationFrame(tick);return;}nextPaint=nextPaint&&now-nextPaint<50?nextPaint+interval:now+interval;const dt=last?Math.min((now-last)/1000,.08):1/60;last=now;journey.tick(dt,fast?workSpring(journey.value,journey.target):5);const paintStart=profiler?performance.now():0;paint(now,dt);profiler?.paint(now,performance.now()-paintStart);if(journey.moving||ambient())schedule();else{last=nextPaint=0;profiler?.suspend();data(root,'renderState','idle');}}
+function ambient(){if(journey.value<.001&&!prelude.animating)return false;return !leaving&&(journeyFrame(journey.value).work<.999&&!reduced.matches||hands?.moving||work.animating);}
 function schedule(){if(frame||dead||document.hidden)return;data(root,'renderState',journey.moving?'moving':'ambient');frame=requestAnimationFrame(tick);}
 function wake(){if(!dead&&!document.hidden){if(!frame)last=0;schedule();}}
 function cancel(){cancelAnimationFrame(frame);frame=0;last=nextPaint=0;}
 function scrollJourney(delta){if(journey.wheel(delta,performance.now(),work.scrollRange())){audio.arm();if(reduced.matches)journey.snapToTarget();controls();wake();}}
 root.addEventListener('wheel',e=>{if(credits.open||leaving||e.ctrlKey)return;e.preventDefault();const factor=e.deltaMode===1?20:e.deltaMode===2?innerHeight:1;scrollJourney((Math.abs(e.deltaX)>Math.abs(e.deltaY)?e.deltaX:e.deltaY)*factor);},{passive:false});
 previous.onclick=()=>go(Math.ceil(journey.target-.001)-1);next.onclick=()=>go(Math.floor(journey.target+.001)+1);
-root.addEventListener('pointermove',e=>{const x=e.clientX/innerWidth,y=e.clientY/innerHeight;if(journeyFrame(journey.value).work>.99){if(!reduced.matches&&work.animating)work.pointer(x*2-1,y*2-1);return;}root.style.setProperty('--mx',`${(x*100).toFixed(1)}%`);root.style.setProperty('--my',`${(y*100).toFixed(1)}%`);if(!reduced.matches){prelude.pointer(x*2-1,y*2-1);closing.pointer(x*2-1,y*2-1);scene?.pointer(x*2-1,y*2-1);warp.pointer(x-.5);}},{passive:true});
+root.addEventListener('pointermove',e=>{const x=e.clientX/innerWidth,y=e.clientY/innerHeight;if(journeyFrame(journey.value).work>.99){if(!reduced.matches&&work.animating)work.pointer(x*2-1,y*2-1);return;}root.style.setProperty('--mx',`${(x*100).toFixed(1)}%`);root.style.setProperty('--my',`${(y*100).toFixed(1)}%`);if(!reduced.matches){prelude.pointer(x*2-1,y*2-1);closing.pointer(x*2-1,y*2-1);scene?.pointer(x*2-1,y*2-1);warp.pointer(x-.5);if(journey.value<.12)wake();}},{passive:true});
 root.addEventListener('pointerdown',e=>{if(journey.value>9.7&&!e.target.closest('button,a'))closing.tap(e.clientX/innerWidth,e.clientY/innerHeight);},{passive:true});
 document.addEventListener('keydown',e=>{if(credits.open||e.target.closest('input,textarea,select')||e.ctrlKey||e.metaKey||e.altKey)return;const moves={ArrowDown:1,PageDown:1,ArrowUp:-1,PageUp:-1};if(e.key in moves){e.preventDefault();if(!e.repeat)go(moves[e.key]>0?Math.floor(journey.target+.001)+1:Math.ceil(journey.target-.001)-1,true);}else if(e.key==='Home'||e.key==='End'){e.preventDefault();go(e.key==='Home'?0:LAST_STOP,true);}});
 let touchY=null,touchScrub=false;root.addEventListener('touchstart',e=>{if(credits.open||leaving)return;touchY=e.touches[0].clientY;touchScrub=journey.target>=6&&journey.target<=8;journey.lastWheel=-Infinity;},{passive:true});
@@ -85,10 +91,10 @@ host.addEventListener('scene-lost',fallback);
 host.addEventListener('scene-ready',wake);
 async function enter(e){if(e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;e.preventDefault();if(leaving)return;leaving=true;audio.fadeOut();root.animate([{opacity:1},{opacity:0}],{duration:reduced.matches?180:800,easing:'ease-out',fill:'forwards'});setTimeout(()=>{dispose();location.assign(e.currentTarget?.href||'/?workspace=1');},reduced.matches?200:1000);}
 document.querySelectorAll('a[href="/?workspace=1"]').forEach(a=>a.addEventListener('click',enter));
-function dispose(){if(dead)return;dead=true;cancel();clearTimeout(resizeTimer);hands?.dispose();hands=null;preludeInput.dispose();referenceInput.dispose();prelude.dispose();closing.dispose();warp.dispose();work.dispose();scene?.dispose();scene=null;audio.dispose();root.dataset.renderState='disposed';}
+function dispose(){if(dead)return;dead=true;profiler?.dispose();cancel();clearTimeout(resizeTimer);hands?.dispose();hands=null;preludeInput.dispose();referenceInput.dispose();prelude.dispose();closing.dispose();warp.dispose();work.dispose();scene?.dispose();scene=null;audio.dispose();root.dataset.renderState='disposed';}
 window.addEventListener('pagehide',dispose);window.addEventListener('pageshow',e=>{if(e.persisted)location.reload();});
 import('./earth-globe.mjs?v=4').then(({createEarth})=>{if(!dead){try{prelude.attachGlobe(createEarth(document.querySelector('#earth-scene')));wake();}catch(error){console.warn('Earth: using projected city fallback',error.message);}}}).catch(error=>console.warn('Earth unavailable',error.message));
-import('./reference-art.mjs?v=6').then(({createReferenceArt})=>{if(!dead){prelude.attachReference(createReferenceArt(document.querySelector('#reference-art'),wake));wake();}}).catch(error=>console.warn('Reference artwork unavailable',error.message));
+import('./reference-art.mjs?v=7').then(({createReferenceArt})=>{if(!dead){prelude.attachReference(createReferenceArt(document.querySelector('#reference-art'),wake,{onPlaybackChange(mask){audio.setRecords(mask,true);audio.arm();}}));wake();}}).catch(error=>console.warn('Reference artwork unavailable',error.message));
 controls();paint();audio.visibility(document.hidden);audio.arm();
 try{const {createScene}=await import('./scene.js?v=9');if(!dead){scene=createScene(host);paint();wake();}}catch(error){console.warn('Intro: using lightweight landscape',error.message);fallback();}
 if(scene&&!dead){try{const {createHands}=await import('./hands.js?v=4');if(!dead){hands=createHands({renderer:scene.renderer,panel:document.querySelector('#hand-camera'),button:document.querySelector('#hand-toggle'),wake});paint();wake();}}catch(error){console.warn('Hand controls unavailable',error.message);document.querySelector('#hand-toggle').textContent='手势暂不可用';}}

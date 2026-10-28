@@ -1,5 +1,5 @@
 import {clamp,smooth} from './motion.mjs';
-import {imageCover,WaterRipples} from './reference-art.mjs?v=6';
+import {imageCover,WaterRipples} from './reference-art.mjs?v=7';
 import {createGardenAtmosphere,createGardenCanopy,canopyPose} from './garden-atmosphere.mjs?v=4';
 
 export const closingOpacity=p=>smooth((p-9.25)/.72);
