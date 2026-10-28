@@ -33,8 +33,8 @@ export function waterSpan(y){const depth=clamp((y-.71)/.29,0,1);return {left:.29
 
 // Native-resolution CSS image layers keep foliage crisp on 4K displays;
 // only their transforms change per frame. The shared image is decoded once.
-export function createGardenCanopy(host,img){
-  const regions=[[0,0,.23,.31],[0,.26,.20,.33],[.82,0,.18,.59]];
+export function createGardenCanopy(host,img,options={}){
+  const regions=options.regions||[[0,0,.23,.31],[0,.26,.20,.33],[.82,0,.18,.59]],pose=options.pose||canopyPose;
   const layers=regions.map(()=>{const el=document.createElement('div');el.className='garden-canopy-patch';host.append(el);return el;});
   let key='',disposed=false;
   return {render(crop,w,h,time,reduced){
@@ -43,12 +43,13 @@ export function createGardenCanopy(host,img){
     if(next!==key){key=next;regions.forEach(([x,y,pw,ph],i)=>{const s=layers[i].style;
       Object.assign(s,{left:(x*iw-crop.x)*scale+'px',top:(y*ih-crop.y)*scale+'px',width:pw*iw*scale+'px',height:ph*ih*scale+'px',backgroundImage:`url("${img.src}")`,backgroundSize:`${iw*scale}px ${ih*scale}px`,backgroundPosition:`${-x*iw*scale}px ${-y*ih*scale}px`,transformOrigin:i===2?'100% 0':'0 0'});
     });}
-    layers.forEach((el,i)=>{const p=canopyPose(i,time),size=Math.min(1.5,Math.max(.65,w/1280));el.style.transform=`translate3d(${p.x*size}px,${p.y*size}px,0) rotate(${p.angle}rad)`;});
+    layers.forEach((el,i)=>{const p=pose(i,time),size=Math.min(1.5,Math.max(.65,w/1280));el.style.transform=`translate3d(${p.x*size}px,${p.y*size}px,0) rotate(${p.angle}rad)`;});
   },dispose(){disposed=true;layers.forEach(el=>{el.style.backgroundImage='none';el.remove();});host.hidden=true;}};
 }
 
 // One small cached mist texture; no full-image repaint or additional clock.
-export function createGardenAtmosphere(){
+export function createGardenAtmosphere(options={}){
+  const mistPose=options.fogPose||fogPose,spanAt=options.waterSpan||waterSpan,colors=options.leafColors||leafColors,start=options.waterStart??.735,mistCount=options.fogCount??FOG_BUDGET;
   const fog=document.createElement('canvas');fog.width=320;fog.height=128;
   const f=fog.getContext('2d');
   if(f)for(let i=0;i<22;i++){
@@ -61,7 +62,7 @@ export function createGardenAtmosphere(){
     if(disposed||reduced)return;
     ctx.save();ctx.lineCap='round';
     for(let i=0;i<72;i++){
-      const sy=.735+noise(i+450)*.255,span=waterSpan(sy),sx=span.left+(span.right-span.left)*noise(i+540);
+      const sy=start+noise(i+450)*(.99-start),span=spanAt(sy),sx=span.left+(span.right-span.left)*noise(i+540);
       const x=(sx*iw-crop.x)/crop.w*w,y=(sy*ih-crop.y)/crop.h*h;
       const wave=Math.sin(time*(.65+noise(i+630)*.5)+i*2.4),alpha=Math.pow((wave+1)/2,3)*(.12+(sy-.73)*.45);
       const length=(3+noise(i+720)*24)*(w/1280),shift=Math.sin(time*.52+i)*2;
@@ -71,10 +72,10 @@ export function createGardenAtmosphere(){
   function air(ctx,w,h,time,reduced,crop={x:0,y:0,w:1,h:1}){
     if(disposed)return;
     const sw=w/crop.w,sh=h/crop.h;
-    ctx.save();for(let i=0;i<FOG_BUDGET;i++){const p=fogPose(i,time,sw,sh,reduced);ctx.globalAlpha=p.alpha;ctx.drawImage(fog,p.x-crop.x*sw-p.width/2,p.y-crop.y*sh-p.height/2,p.width,p.height);}
+    ctx.save();for(let i=0;i<mistCount;i++){const p=mistPose(i,time,sw,sh,reduced);ctx.globalAlpha=p.alpha;ctx.drawImage(fog,p.x-crop.x*sw-p.width/2,p.y-crop.y*sh-p.height/2,p.width,p.height);}
     if(!reduced)for(let i=0;i<(w<700?10:LEAF_BUDGET);i++){
       const p=leafPose(i,time,w,h);ctx.save();ctx.globalAlpha=p.alpha;ctx.translate(p.x,p.y);ctx.rotate(p.angle);ctx.scale(p.scale*p.flutter,p.scale);
-      ctx.fillStyle=leafColors[i%4];ctx.beginPath();ctx.moveTo(-1,0);ctx.bezierCurveTo(-.35,-.8,.6,-.65,1.2,0);ctx.bezierCurveTo(.5,.62,-.4,.65,-1,0);ctx.fill();
+      ctx.fillStyle=colors[i%colors.length];ctx.beginPath();ctx.moveTo(-1,0);ctx.bezierCurveTo(-.35,-.8,.6,-.65,1.2,0);ctx.bezierCurveTo(.5,.62,-.4,.65,-1,0);ctx.fill();
       ctx.strokeStyle='#563c2477';ctx.lineWidth=.12;ctx.beginPath();ctx.moveTo(-1.2,0);ctx.quadraticCurveTo(0,.07,1.1,0);ctx.stroke();ctx.restore();
     }ctx.restore();
   }

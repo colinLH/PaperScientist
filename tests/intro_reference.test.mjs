@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {discLayout,imageCover,WaterRipples,referenceOpacity} from '../paperscientist/static/intro/reference-art.mjs';
+import {discLayout,discTransforms,imageCover,WaterRipples,referenceOpacity} from '../paperscientist/static/intro/reference-art.mjs';
 import {createPrelude} from '../paperscientist/static/intro/cosmic-art.mjs';
 
 test('disc layout keeps its diagonal order, bounded drag and a stable reduced-motion pose',()=>{
@@ -13,6 +13,22 @@ test('disc layout keeps its diagonal order, bounded drag and a stable reduced-mo
   assert.deepEqual(discLayout(w,h,2,0,0,true),discLayout(w,h,2,0,50,true));
   assert.deepEqual(discLayout(w,h,2,30),discLayout(w,h,2,1.8));
  }
+});
+test('gallery exposes half the left disc and keeps the final desktop gap the widest',()=>{
+ for(const [w,h] of [[1152,562],[2094,902],[3456,1684]]){
+  const p=[0,1,2,3].map(i=>discLayout(w,h,i,0,0,true));assert.equal(p[0].x,0);
+  const gaps=p.slice(1).map((v,i)=>v.x-p[i].x-(v.d+p[i].d)*.47);
+  assert.ok(gaps[2]>gaps[0]&&gaps[2]>gaps[1]);
+  assert.ok(p[3].x-p[2].x<w*(.97-.51));
+ }
+});
+test('record rotation stays inside the tilted plane, with a two-minute revolution and reduced-motion stop',()=>{
+ const pose={...discLayout(1152,562,2,0,0,true),central:true},state={yaw:.4,pitch:.3},aim={x:0,y:0};
+ const a=discTransforms(pose,state,aim,0),b=discTransforms(pose,state,aim,40);
+ assert.equal(a.plane,b.plane);assert.equal(a.spindle,'rotate(0deg)');assert.equal(b.spindle,'rotate(120deg)');
+ assert.equal(discTransforms(pose,state,aim,120).spindle,'rotate(0deg)');
+ const tilted=discTransforms(pose,{yaw:1,pitch:-.5},aim,40);assert.notEqual(tilted.plane,b.plane);assert.equal(tilted.spindle,b.spindle);
+ assert.equal(discTransforms(pose,state,aim,40,true).spindle,'rotate(0deg)');
 });
 test('panoramic image cover stays in bounds at narrow and wide aspect ratios',()=>{
  for(const [w,h] of [[390,844],[2157,1244],[3840,2160]]){const c=imageCover(1672,941,w,h);assert.ok(c.x>=0&&c.y>=0&&c.x+c.w<=1672.0001&&c.y+c.h<=941.0001);assert.ok(Math.abs(c.w/c.h-w/h)<1e-10);}

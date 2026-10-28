@@ -19,3 +19,9 @@ The supplied `figure1.jpg` was also only 334×188. The central and far-right dis
 - `garden-reference-4k.webp`: 3840×2160; third chapter.
 
 All three are enhanced 4K exports, not native 4K captures. Full prompts: `4k-artwork-prompts.md`. Dimensions, hashes and model settings: `artwork-4k.json`. No upscaling model runs in the browser.
+
+## Water-town disc and closing landscape revision
+
+The later two-image request replaces the central disc again, this time with the user's second image: a pink water-town painting with boats and an arch bridge. `disc-watertown-4k.webp` is a direct Real-ESRGAN x4 enhancement of that 1000×561 attachment, fitted to 3840×2160 and encoded as WebP quality 96 (1,867,024 bytes). Its composition and source marks are retained; it has not been redrawn. This is an enhanced export, not native 4K artwork. Source/output hashes and processing details are in `disc-watertown-4k.json`.
+
+The first image in that request has SHA-256 `222d5eac12623526c971b535821442fc764b64d486a460d038af2b61a4b29f3d` and is byte-identical to the earlier 1672×941 pagoda reconstruction. The final chapter therefore reuses its existing 3840×2160 derivative, `disc-pagoda-4k.webp`, without a duplicate asset or another regeneration. The far-left pastoral, neighbouring nebula and far-right Milky Way images keep their existing files.

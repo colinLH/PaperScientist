@@ -1,0 +1,35 @@
+{
+  "path": "disc-watertown-4k.webp",
+  "size": [
+    3840,
+    2160
+  ],
+  "bytes": 1867024,
+  "sha256": "a90e7d7826c057c6cadde1a3be71884541d9fe86e0b0216104ed9bbe2bc010d5",
+  "native_4k": false,
+  "method": "Direct local super-resolution of supplied water-town artwork. Existing source marks retained. No generative redraw.",
+  "source_size": [
+    1000,
+    561
+  ],
+  "source_sha256": "da3b14596d89206820147db917a12931198d41931ab054051be8c077923ee7be",
+  "intermediate_size": [
+    4000,
+    2244
+  ],
+  "super_resolution": {
+    "model": "realesrgan-x4plus",
+    "scale": 4,
+    "tile_size": 256,
+    "threads": "1:1:1"
+  },
+  "export": {
+    "size": [
+      3840,
+      2160
+    ],
+    "format": "WebP",
+    "quality": 96,
+    "fit": "center crop, Lanczos"
+  }
+}

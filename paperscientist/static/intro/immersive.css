@@ -88,6 +88,7 @@
 .research-disc:focus-visible{outline:3px solid #556857;outline-offset:5px}.research-disc:active{cursor:grabbing}
 .disc-print{position:absolute;inset:3px;display:block;border-radius:50%;background-size:cover;background-position:center;overflow:hidden;box-shadow:inset 0 0 20px #0004}
 .disc-print::after{content:'';position:absolute;inset:0;border-radius:50%;background:linear-gradient(120deg,#fff2,transparent 40%,#0002 80%);pointer-events:none}
+.disc-print{transform-origin:50% 50%;will-change:transform}
 .disc-hub{position:absolute;left:50%;top:50%;width:30%;height:30%;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle,#f3f3f0 0 46%,#e4e7e7 47% 53%,#a2acb1 54% 64%,#d4d8d9 65% 77%,#959da0 78% 82%,#c2c7c6 83%);box-shadow:0 0 0 1px #747d8080}
 .disc-label{display:block;position:absolute;top:12%;left:15%;right:15%;font:600 clamp(26px,2.4vw,62px)/.98 Impact,'Arial Narrow',sans-serif;text-transform:uppercase;text-align:center;letter-spacing:-.02em;color:#eeece3;z-index:1}
 .disc-edition{position:absolute;left:0;right:0;bottom:10%;text-align:center;font:12px Georgia,serif;color:#f2f2eb;z-index:1}
@@ -153,4 +154,27 @@
  #journey[data-scene="2"][data-prelude=true] #prelude-tools{left:7%;right:7%;width:auto;bottom:9%;padding:10px 8px 0;font-size:10px}
  #journey[data-scene="2"][data-prelude=true] #prelude-selection{font-size:10px}#journey[data-scene="2"][data-prelude=true] footer{left:7%;right:7%;bottom:14px}
 }
-@media(prefers-reduced-motion:reduce){.research-disc,.garden-plate,.garden-canopy-patch{will-change:auto}}
+@media(prefers-reduced-motion:reduce){.research-disc,.disc-print,.garden-plate,.garden-canopy-patch{will-change:auto}}
+
+/* The journey ends at the supplied lakeside pagoda, with an unobstructed CTA. */
+#closing-landscape{position:absolute;inset:0;z-index:1;overflow:hidden;pointer-events:none}
+.closing-plate{position:absolute;inset:0;overflow:hidden;transform-origin:center}
+.closing-plate>img,.closing-plate>canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+#journey[data-ending=true]::before,#journey[data-ending=true]::after,#journey[data-ending=true] .vignette{display:none}
+#journey[data-ending=true][data-scene="5"] #copy{left:7%;top:auto;bottom:17%;width:390px;padding:24px 28px;background:#f8f5e9e8;border-left:2px solid #64715a;text-shadow:none}
+#journey[data-ending=true][data-scene="5"] #chapter{font-size:10px;letter-spacing:.12em;margin:0 0 14px;color:#4f624c;text-shadow:none}
+#journey[data-ending=true][data-scene="5"] #chapter::before{display:none}
+#journey[data-ending=true][data-scene="5"] h1{font:400 clamp(30px,2.6vw,45px)/1.25 Georgia,'Songti SC','SimSun',serif;letter-spacing:0;color:#233d32;text-shadow:none}
+#journey[data-ending=true][data-scene="5"] #description{font-size:13px;line-height:1.8;letter-spacing:0;margin:16px 0;color:#43594b;text-shadow:none}
+#journey[data-ending=true][data-scene="5"] #start{background:#214438;color:#fbf5e4;border:1px solid #57715c;border-radius:3px;gap:16px;padding:11px 18px;margin:22px 0 0;box-shadow:none;backdrop-filter:none;animation:none}
+#journey[data-ending=true][data-scene="5"] #start::after{display:none}
+#journey[data-ending=true][data-scene="5"] :is(header,footer){color:#203a30}
+#journey[data-ending=true][data-scene="5"] :is(.wordmark,.header-actions,footer>div){background:#f8f5e9dc;padding:8px 10px;text-shadow:none}
+#journey[data-ending=true][data-scene="5"] .wordmark svg{filter:none}
+#journey[data-ending=true][data-scene="5"] #sound{color:inherit}
+#journey[data-ending=true][data-scene="5"] .enter-link{border-color:#203a3066}
+#journey[data-ending=true][data-scene="5"] #chapters button::after{background:#21443888;box-shadow:none}
+#journey[data-ending=true][data-scene="5"] #chapters button[aria-current=true]::after{background:#214438}
+#journey[data-ending=true][data-scene="5"] .scroll-control button{border-color:#203a3066;box-shadow:none;backdrop-filter:none;animation:none}
+@media(max-width:700px){.closing-plate>img{object-position:73% center}#journey[data-ending=true][data-scene="5"] #copy{left:7%;bottom:16%;width:77%;padding:18px}#journey[data-ending=true][data-scene="5"] h1{font-size:30px}#journey[data-ending=true][data-scene="5"] #description{font-size:11px}#journey[data-ending=true][data-scene="5"] #start{padding:9px 12px;margin-top:16px}#journey[data-ending=true][data-scene="5"] #start small{font-size:10px}}
+@media(max-height:560px) and (min-width:701px){#journey[data-ending=true][data-scene="5"] #copy{bottom:17%;padding:16px 22px;width:330px}#journey[data-ending=true][data-scene="5"] h1{font-size:28px}#journey[data-ending=true][data-scene="5"] #description{margin:10px 0;font-size:11px}#journey[data-ending=true][data-scene="5"] #start{margin-top:12px}}

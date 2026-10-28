@@ -1,5 +1,13 @@
 # A question becomes a journey
 
+## Tilted turntables and a living closing landscape — 2026-10-28
+
+The newest request positions the first disc's centre at the gallery's left boundary, exposing about half its circular face. The following discs advance toward the right while the final visual gap remains the largest. Each print rotates within its own plane at three degrees per second (one revolution in two minutes). The outer transform owns perspective, pointer tilt and placement; the inner transform owns spindle rotation, so dragging the viewing angle cannot change the rotation axis. Reduced motion fixes the spindle. The central image is the user's newly supplied pink water-town painting, enhanced directly to 3840×2160 with its source marks retained.
+
+The final chapter uses the first supplied image, reusing the existing 4K pagoda landscape. The composition guides all motion: two softly feathered cloud patches drift in the sky, two cherry-branch patches sway at the sides, seven overlapping mist veils remain around the mountain valleys and pagoda, and pink petals descend slowly. Narrow glints and bounded click ripples stay in the lower lake. A small translucent paper panel keeps the existing final copy and Start destination legible without covering the tower. Portrait framing retains the tower at the right of the original image.
+
+The final image loads near the Work exit. It uses the existing journey clock, pauses when hidden, and retains the 1.4 MP effects-canvas limit. Four small image patches and one mist texture remain fixed in number; no new WebGL renderer or independent timer is added. The old landscape stops rendering once the new background fully covers it and remains a load-failure fallback. Reduced motion suppresses moving foliage, clouds, petals, glints and parallax while retaining static mist. Resource disposal releases the image references and effects caches. This is layered two-dimensional animation, not a reconstructed three-dimensional scene.
+
 ## Selected disc images and living garden — 2026-10-28
 
 Use the three new user attachments in their specified positions: pagoda landscape on the central disc, pastoral European painting on the far-left partial disc, and colourful Milky Way on the far-right disc. Preserve the neighbouring left disc and the entire third-chapter composition. The source dimensions, conversions and mapping are recorded in `textures/disc-image-sources.md`; do not pretend the small attachments are 4K originals.
