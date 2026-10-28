@@ -1,11 +1,12 @@
 import {clamp,smooth} from './motion.mjs';
+import {createGardenAtmosphere,waterSpan} from './garden-atmosphere.mjs';
 
 export const referenceOpacity=p=>p<1?1-smooth((p-.12)/.65):smooth((p-1.18)/.66)*(1-smooth((p-2.28)/.5));
 export const records=[
-  {name:'观察',title:'Begin with\na question',line:'从好奇心开始',note:'留意尚未被解释的现象。',image:'garden-reference-wide.png',style:'landscape'},
+  {name:'观察',title:'Begin with\na question',line:'从好奇心开始',note:'留意尚未被解释的现象。',image:'disc-pastoral.webp',style:'landscape'},
   {name:'文献',title:'The shape\nof an idea',line:'沿着线索阅读',note:'阅读文献，找到问题之间的联系。',image:'nebula-4k.webp',style:'night'},
-  {name:'方向',title:'Every idea\nbegins here',line:'找到值得追问的方向',note:'比较不同解释，留下值得验证的假设。',image:'garden-reference-wide.png',style:'garden'},
-  {name:'探索',title:'Beyond',line:'向未知展开',note:'把问题带入更广阔的知识世界。',image:'nebula-4k.webp',style:'mono'},
+  {name:'方向',title:'Every idea\nbegins here',line:'找到值得追问的方向',note:'比较不同解释，留下值得验证的假设。',image:'disc-pagoda.webp',style:'garden'},
+  {name:'探索',title:'Beyond',line:'向未知展开',note:'把问题带入更广阔的知识世界。',image:'disc-milky-way.webp',style:'milky-way'},
 ];
 export function discLayout(w,h,index,yaw=0,time=0,reduced=false){
   const narrow=w<700,positions=narrow?[-.20,.18,.77,1.43]:[-.07,.19,.51,.97];
@@ -25,9 +26,9 @@ export function createReferenceArt(host,wake){
   host.innerHTML=`<section class="disc-gallery" aria-label="研究灵感唱片集">
     <div class="disc-record"><h1>从一个问题<br>走向多种可能。</h1><dl><div><dt>研究起点</dt><dd>你的好奇心</dd></div><div><dt>正在浏览</dt><dd data-record-name>方向</dd></div><div><dt>下一步</dt><dd data-record-note>比较不同解释，留下值得验证的假设。</dd></div></dl></div>
     <div class="disc-field"></div><div class="disc-editorial"><p><small>阅读与关联</small>“沿着线索，<br>发现新的联系。”</p><p><small>提问与判断</small>“让值得追问的问题，<br>成为研究的起点。”</p></div>
-  </section><section class="garden-scene" aria-label="山水研究庭院" hidden><div class="garden-plate"><img src="/intro-assets/textures/garden-reference-wide.png" alt="红色古塔与庭院、拱桥、秋色树林和山间溪水的绘画"/><canvas aria-hidden="true"></canvas></div><div class="garden-mist" aria-hidden="true"></div><div class="garden-mist second" aria-hidden="true"></div></section>`;
+  </section><section class="garden-scene" aria-label="山水研究庭院" hidden><div class="garden-plate"><img src="/intro-assets/textures/garden-reference-wide.png" alt="红色古塔与庭院、拱桥、秋色树林和山间溪水的绘画"/><canvas aria-hidden="true"></canvas></div></section>`;
   const gallery=host.querySelector('.disc-gallery'),field=host.querySelector('.disc-field'),garden=host.querySelector('.garden-scene'),plate=host.querySelector('.garden-plate'),img=plate.querySelector('img'),canvas=plate.querySelector('canvas'),ctx=canvas.getContext('2d',{alpha:true});
-  const mist=[...host.querySelectorAll('.garden-mist')],name=host.querySelector('[data-record-name]'),note=host.querySelector('[data-record-note]'),ripples=new WaterRipples(),abort=new AbortController();
+  const atmosphere=createGardenAtmosphere(),name=host.querySelector('[data-record-name]'),note=host.querySelector('[data-record-note]'),ripples=new WaterRipples(),abort=new AbortController();
   let dead=false,stage=0,selected=2,w=1,h=1,lastTime=null,lastRatio='',frames=0,waterFeedback=false;
   const discs=records.map((record,index)=>{
     const button=document.createElement('button');button.className='research-disc';button.dataset.print=record.style;button.setAttribute('aria-label','选择'+record.name+'唱片');button.setAttribute('aria-pressed',String(index===selected));
@@ -53,14 +54,22 @@ export function createReferenceArt(host,wake){
         if(key!==lastRatio){lastRatio=key;canvas.width=Math.round(w*ratio);canvas.height=Math.round(h*ratio);}
         const dx=reduced?0:aim.x*5+clamp(state.yaw,-1,1)*6,dy=reduced?0:aim.y*3;
         plate.style.transform=`translate3d(${dx}px,${dy}px,0) scale(1.025)`;
-        mist.forEach((el,i)=>{el.style.transform=`translate3d(${reduced?0:Math.sin(t*.035+i*2)*4}%,0,0)`;});
         ripples.tick(dt,reduced);
         if(ctx){ctx.setTransform(ratio,0,0,ratio,0,0);ctx.clearRect(0,0,w,h);
           if(img.complete&&img.naturalWidth){
             const crop=imageCover(img.naturalWidth,img.naturalHeight,w,h,w<=700?.62:.5);
-            for(let y=h*.73;y<h;y+=4){const a=smooth((y/h-.73)/.08),offset=reduced?0:Math.sin(y*.052+t*1.1)*1.3*a;ctx.globalAlpha=a*.8;const sy=crop.y+y/h*crop.h,sh=Math.min(4/h*crop.h,img.naturalHeight-sy);if(sh>0)ctx.drawImage(img,crop.x,sy,crop.w,sh,offset,y,w,4);}
+            atmosphere.foliage(ctx,img,crop,w,h,t,reduced);
+            if(!reduced)for(let y=0;y<h;y+=4){
+              const sy=crop.y+y/h*crop.h,ny=sy/img.naturalHeight;if(ny<.71)continue;
+              const span=waterSpan(ny),sx=Math.max(crop.x,span.left*img.naturalWidth),right=Math.min(crop.x+crop.w,span.right*img.naturalWidth),sw=right-sx;
+              const a=smooth((ny-.71)/.07),offset=(Math.sin(y*.045+t*1.15)*1.8+Math.sin(y*.08-t*.63)*.7)*a;
+              const sh=Math.min(4/h*crop.h,img.naturalHeight-sy);ctx.globalAlpha=a*.9;
+              if(sh>0&&sw>0)ctx.drawImage(img,sx,sy,sw,sh,(sx-crop.x)/crop.w*w+offset,y,sw/crop.w*w,4);
+            }
+            ctx.globalAlpha=1;atmosphere.shimmer(ctx,crop,w,h,t,reduced);
           }
           ctx.globalAlpha=1;for(const r of ripples.items)for(let i=0;i<3;i++){const radius=(r.age*50+i*16);ctx.beginPath();ctx.ellipse(r.x*w,r.y*h,radius,radius*.22,0,0,Math.PI*2);ctx.strokeStyle=`rgba(253,250,226,${(1-r.age/2.5)*.38})`;ctx.lineWidth=1;ctx.stroke();}
+          atmosphere.air(ctx,w,h,t,reduced);
         }
       }
       frames++;host.dataset.frames=String(frames);host.dataset.selected=String(selected);host.dataset.ripples=String(ripples.items.length);host.dataset.motion=t.toFixed(3);host.dataset.yaw=state.yaw.toFixed(3);return [];
@@ -69,6 +78,6 @@ export function createReferenceArt(host,wake){
     activate(){if(stage===0)choose((selected+1)%records.length);else water();},
     reset(){choose(2);ripples.items=[];waterFeedback=false;},
     get info(){return stage===0?{help:'拖动唱片集 · 点击切换研究线索',action:'浏览下一张',selection:records[selected].line}:{help:'移动欣赏园林 · 点击水面泛起涟漪',action:'轻点水面',selection:waterFeedback?'涟漪渐息，让想法慢慢沉淀。':''};},
-    dispose(){dead=true;abort.abort();ripples.items=[];img.removeAttribute('src');canvas.width=canvas.height=1;host.replaceChildren();host.hidden=true;}
+    dispose(){dead=true;abort.abort();ripples.items=[];atmosphere.dispose();img.removeAttribute('src');canvas.width=canvas.height=1;host.replaceChildren();host.hidden=true;}
   };
 }

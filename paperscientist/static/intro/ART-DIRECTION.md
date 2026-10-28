@@ -1,5 +1,11 @@
 # A question becomes a journey
 
+## Selected disc images and living garden — 2026-10-28
+
+Use the three new user attachments in their specified positions: pagoda landscape on the central disc, pastoral European painting on the far-left partial disc, and colourful Milky Way on the far-right disc. Preserve the neighbouring left disc and the entire third-chapter composition. The source dimensions, conversions and mapping are recorded in `textures/disc-image-sources.md`; do not pretend the small attachments are 4K originals.
+
+Motion purpose: delight in the occasional welcome experience. A gentle shared breeze links the three feathered canopy patches, six mountain mist wisps and slow tumbling leaves. Water displacement and 72 narrow, softly varying glints stay inside the creek rather than distorting the bridge and banks. The fixed population is 18 leaves on desktop and 10 on phones; each falls over 42–72 seconds with a faded loop boundary. The original shared clock, 1.4 MP canvas limit and hidden-scene pause remain; there is no new WebGL context, animation loop, full-screen blur or growing particle list. Four small offscreen textures are cached once and released on disposal. Reduced motion suppresses moving water, foliage and leaves and fixes the mountain mist. The existing smooth interaction state continues handling pointer movement and chapter reversal.
+
 ## User-reference revision — 2026-10-28
 
 The newest explicit reference supersedes the previous material sculptures. Chapter one closely follows the supplied A24 disc-gallery composition: a cool paper-white inset frame, compact top-left serif heading and ruled metadata, enormous printed discs rising diagonally from the lower-left to cropped upper-right, and two small editorial captions below. Research-themed labels and our local imagery replace movie branding and claims. Chapter three follows the supplied painted garden: red pagoda, stone bridge, autumn trees, mountains, mist and reflective water; a small caption leaves the artwork dominant. This is a deliberate departure from the rejected dark metal abstractions, not another variation of them.
