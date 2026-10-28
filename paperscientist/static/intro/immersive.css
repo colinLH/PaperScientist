@@ -132,8 +132,7 @@
 .record-now{position:absolute;left:25%;right:25%;top:13%;text-align:center;pointer-events:none;color:#494839}
 .record-now>span{display:block;font:10px/1.8 'Segoe UI',sans-serif;letter-spacing:.19em;color:#857452}
 .record-now>strong{display:block;font:italic 24px/1.25 Georgia,serif;margin:3px 0 6px}
-.record-now>small{font-size:10px;color:#7b796f}
-#record-audio-status{display:block;margin-top:4px}
+.record-now>small{display:block;max-width:42ch;margin:8px auto 0;font:12px/1.65 'Segoe UI',sans-serif;color:#7b796f;text-wrap:pretty}
 .garden-scene,.garden-plate{position:absolute;inset:0;overflow:hidden}
 .garden-plate{will-change:transform;transform-origin:center}
 .garden-plate img,.garden-plate canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
@@ -178,7 +177,7 @@
  .room-sleeves{right:3%;top:6%;width:17%;height:16%;opacity:.38}.room-sleeve{padding:2px 2px 8px}.room-sleeve span,.room-sleeves>small{display:none}.room-imprint{bottom:18%;left:7%;opacity:.45}.room-imprint b{font-size:14px}.room-table{top:51%}
  .disc-label{font-size:clamp(10px,2.8vw,16px)}.research-disc[data-print=milky-way] .disc-label{font-size:clamp(12px,4vw,20px)}.disc-edition{display:none}
  .research-disc[data-print=garden] .disc-label{font-size:clamp(10px,2.8vw,16px)}
- .record-now{top:31%;left:6%;right:6%}.record-now>strong{font-size:18px}.record-now>span{font-size:8px}.record-now>small{font-size:9px}
+ .record-now{top:31%;left:6%;right:6%}.record-now>strong{font-size:18px}.record-now>span{font-size:8px}.record-now>small{font-size:11px}
  .disc-gallery{inset:10% 5% 12%}.disc-record{top:15px;left:12px;width:69%;max-width:260px}.disc-record h1{font-size:27px}.disc-record dl{font-size:10px}.disc-record dt{font-size:9px}.disc-record dl>div{padding:3px 0}
  .garden-plate img{object-position:62% center}
  .disc-editorial{left:12%;right:12%;bottom:2%;gap:14px}.disc-editorial p{font-size:12px}.disc-editorial small{font-size:8px;line-height:2}

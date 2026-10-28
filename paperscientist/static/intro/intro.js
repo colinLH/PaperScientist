@@ -1,13 +1,13 @@
 import {Journey} from './motion.mjs';
 import {Soundscape} from './audio.js?v=4';
-import {createPrelude,preludeOpacity} from './cosmic-art.mjs?v=17';
+import {createPrelude,preludeOpacity} from './cosmic-art.mjs?v=18';
 import {CITIES} from './earth-data.mjs';
 import {bindPreludeInput} from './prelude-interaction.mjs?v=3';
 import {LAST_STOP,chapterStops,journeyFrame} from './journey-map.mjs';
 import {createWarp} from './warp.js';
 import {createWork} from './work.js?v=2';
 import {workSpring} from './work-layout.mjs?v=2';
-import {createClosingLandscape} from './closing-landscape.mjs?v=5';
+import {createClosingLandscape} from './closing-landscape.mjs?v=6';
 import {RECORD_SCORE,recordIndices} from './record-score.mjs';
 
 const chapters=[
@@ -94,7 +94,7 @@ document.querySelectorAll('a[href="/?workspace=1"]').forEach(a=>a.addEventListen
 function dispose(){if(dead)return;dead=true;profiler?.dispose();cancel();clearTimeout(resizeTimer);hands?.dispose();hands=null;preludeInput.dispose();referenceInput.dispose();prelude.dispose();closing.dispose();warp.dispose();work.dispose();scene?.dispose();scene=null;audio.dispose();root.dataset.renderState='disposed';}
 window.addEventListener('pagehide',dispose);window.addEventListener('pageshow',e=>{if(e.persisted)location.reload();});
 import('./earth-globe.mjs?v=4').then(({createEarth})=>{if(!dead){try{prelude.attachGlobe(createEarth(document.querySelector('#earth-scene')));wake();}catch(error){console.warn('Earth: using projected city fallback',error.message);}}}).catch(error=>console.warn('Earth unavailable',error.message));
-import('./reference-art.mjs?v=8').then(({createReferenceArt})=>{if(!dead){prelude.attachReference(createReferenceArt(document.querySelector('#reference-art'),wake,{onPlaybackChange(mask){audio.setRecords(mask,true);audio.arm();}}));wake();}}).catch(error=>console.warn('Reference artwork unavailable',error.message));
+import('./reference-art.mjs?v=9').then(({createReferenceArt})=>{if(!dead){prelude.attachReference(createReferenceArt(document.querySelector('#reference-art'),wake,{onPlaybackChange(mask){audio.setRecords(mask,true);audio.arm();}}));wake();}}).catch(error=>console.warn('Reference artwork unavailable',error.message));
 controls();paint();audio.visibility(document.hidden);audio.arm();
 try{const {createScene}=await import('./scene.js?v=9');if(!dead){scene=createScene(host);paint();wake();}}catch(error){console.warn('Intro: using lightweight landscape',error.message);fallback();}
 if(scene&&!dead){try{const {createHands}=await import('./hands.js?v=4');if(!dead){hands=createHands({renderer:scene.renderer,panel:document.querySelector('#hand-camera'),button:document.querySelector('#hand-toggle'),wake});paint();wake();}}catch(error){console.warn('Hand controls unavailable',error.message);document.querySelector('#hand-toggle').textContent='手势暂不可用';}}

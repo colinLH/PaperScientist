@@ -2,7 +2,7 @@ import {clamp,smooth} from './motion.mjs';
 import {createGardenAtmosphere,createGardenCanopy} from './garden-atmosphere.mjs?v=4';
 import {createGardenPond,pondLeafPose} from './garden-pond.mjs?v=2';
 import {createRecordPlayers} from './record-player.mjs';
-import {RECORD_SCORE,recordIndices,toggleRecord} from './record-score.mjs';
+import {recordIndices,toggleRecord} from './record-score.mjs';
 
 export const referenceOpacity=p=>p<1?1-smooth((p-.12)/.65):smooth((p-1.18)/.66)*(1-smooth((p-2.28)/.5));
 export const records=[
@@ -10,6 +10,24 @@ export const records=[
   {name:'文献',title:'The shape\nof an idea',line:'沿着线索阅读',note:'阅读文献，找到问题之间的联系。',image:'nebula-4k.webp',style:'night'},
   {name:'方向',title:'Every idea\nbegins here',line:'找到值得追问的方向',note:'比较不同解释，留下值得验证的假设。',image:'disc-watertown-4k.webp',style:'garden'},
   {name:'探索',title:'Beyond',line:'向未知展开',note:'把问题带入更广阔的知识世界。',image:'disc-milky-way-4k.webp',style:'milky-way'},
+];
+// Research captions follow the selected records, independently of their music.
+const researchNotes=[null,
+  ['Observe & Question','A paper begins with a question worth answering.'],
+  ['Read & Connect','Trace the literature to find what is known and what is missing.'],
+  ['From Curiosity to Context','Place a fresh question in conversation with published research.'],
+  ['Form a Hypothesis','Turn an open question into a claim that can be tested.'],
+  ['A Question, Sharpened','Give an observation a clear explanation to investigate.'],
+  ['Beyond the Literature','Use gaps in prior work to shape a testable hypothesis.'],
+  ['Define the Contribution','Connect the research gap to a specific claim and a new approach.'],
+  ['Test & Discover','Design experiments that turn uncertainty into evidence.'],
+  ['Evidence Starts Here','Let a research question guide what you measure and compare.'],
+  ['Put Prior Work to the Test','Compare established methods and examine where they fall short.'],
+  ['Find the Research Gap','Bring questions, related work and experiments into focus.'],
+  ['From Hypothesis to Evidence','Test the proposed explanation and learn from the results.'],
+  ['Follow the Evidence','Link each question to a hypothesis, an experiment and a finding.'],
+  ['Build on What Came Before','Develop a new approach and evaluate it against prior work.'],
+  ['From Question to Paper','Connect questions, literature, hypotheses and evidence into a paper.'],
 ];
 export function discLayout(w,h,index,yaw=0,time=0,reduced=false){
   const narrow=w<700;
@@ -31,7 +49,7 @@ export function createReferenceArt(host,wake,{onPlaybackChange=()=>{}}={}){
     <div class="record-room" aria-hidden="true"><div class="room-window"></div><div class="room-table"></div><div class="room-sleeves">${records.map((r,i)=>`<div class="room-sleeve" style="--slot:${i}"><img src="/intro-assets/textures/${r.image}" alt=""/><span>0${i+1} / ${r.name}</span></div>`).join('')}<small>A COLLECTION OF POSSIBILITIES</small></div><span class="room-imprint">PAPERSCIENTIST<br><b>Listening room</b><i>READ · CONNECT · DISCOVER</i></span></div>
     <div class="disc-record"><h1>从一个问题<br>走向多种可能。</h1><dl><div><dt>研究起点</dt><dd>你的好奇心</dd></div><div><dt>正在浏览</dt><dd data-record-name>方向</dd></div><div><dt>下一步</dt><dd data-record-note>比较不同解释，留下值得验证的假设。</dd></div></dl></div>
     <div class="disc-field"></div><div class="disc-editorial"><p><small>阅读与关联</small>“沿着线索，<br>发现新的联系。”</p><p><small>提问与判断</small>“让值得追问的问题，<br>成为研究的起点。”</p></div>
-    <div class="record-now" hidden><span data-record-combination></span><strong data-record-track role="status" aria-live="polite"></strong><small>再点唱片收回 · 进度自动保留</small><small id="record-audio-status" aria-live="off"></small></div>
+    <div class="record-now" hidden aria-live="polite" aria-atomic="true"><span data-record-combination></span><strong data-record-research></strong><small data-record-description></small></div>
   </section><section class="garden-scene" aria-label="山水研究庭院" hidden><div class="garden-plate"><img src="/intro-assets/textures/garden-reference-4k.webp" alt="红色古塔与庭院、拱桥、秋色树林和山间溪水的绘画"/><div class="garden-canopy" aria-hidden="true"></div><canvas aria-hidden="true"></canvas></div></section>`;
   const gallery=host.querySelector('.disc-gallery'),field=host.querySelector('.disc-field'),garden=host.querySelector('.garden-scene'),plate=host.querySelector('.garden-plate'),img=plate.querySelector('img'),canvas=plate.querySelector('canvas'),ctx=canvas.getContext('2d',{alpha:true});
   const pond=createGardenPond(),atmosphere=createGardenAtmosphere({leafPose:pondLeafPose}),canopy=createGardenCanopy(plate.querySelector('.garden-canopy'),img),name=host.querySelector('[data-record-name]'),note=host.querySelector('[data-record-note]'),ripples=new WaterRipples(),abort=new AbortController();
@@ -50,7 +68,7 @@ export function createReferenceArt(host,wake,{onPlaybackChange=()=>{}}={}){
     selected=i;playing=toggleRecord(playing,i);name.textContent=records[i].name;note.textContent=records[i].note;
     discs.forEach((d,j)=>{const active=Boolean(playing&(1<<j));d.setAttribute('aria-pressed',String(active));d.setAttribute('aria-label',(active?'收回':'播放')+records[j].name+'唱片');});
     players.set(playing);now.hidden=!playing;editorial.hidden=Boolean(playing);gallery.dataset.playing=String(playing);gallery.dataset.ensemble=String(playing===15);host.dataset.playing=String(playing);
-    if(playing){host.querySelector('[data-record-combination]').textContent=recordIndices(playing).map(j=>String(j+1).padStart(2,'0')).join(' + ')+' / '+(recordIndices(playing).length>1?'COMPOSITION':'NOW PLAYING');host.querySelector('[data-record-track]').textContent=RECORD_SCORE[playing].title;}
+    if(playing){const [title,description]=researchNotes[playing];host.querySelector('[data-record-combination]').textContent=recordIndices(playing).map(j=>String(j+1).padStart(2,'0')).join(' + ')+' / RESEARCH';host.querySelector('[data-record-research]').textContent=title;host.querySelector('[data-record-description]').textContent=description;}
     onPlaybackChange(playing);wake();
   }
   function water(x=.62,y=.84){ripples.add(x,y);waterFeedback=true;wake();}
