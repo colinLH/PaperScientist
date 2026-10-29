@@ -111,7 +111,7 @@ test('repeated startles keep visible fish apart, inside the water, and turning c
     const p=poses[i],a=pondPoint(p.x,p.y,w,h,crop),old=previous[i];
     assert.ok(inPond(p.x,p.y));assert.ok(a.x>radius&&a.x<w-radius&&a.y>radius&&a.y<h-radius,JSON.stringify({w,h,t,i,a,radius}));
     assert.equal(p.alpha,.94);
-    const heading=v=>Math.atan2(v.vy*h/crop.h,v.vx*w/crop.w),delta=heading(p)-heading(old);
+    const heading=v=>v.heading??Math.atan2(v.vy*h/crop.h,v.vx*w/crop.w),delta=heading(p)-heading(old);
     assert.ok(Math.abs(Math.atan2(Math.sin(delta),Math.cos(delta)))<.04,'no sudden reversal');
     for(let j=i+1;j<poses.length;j++){const b=pondPoint(poses[j].x,poses[j].y,w,h,crop);assert.ok(Math.hypot(a.x-b.x,a.y-b.y)>radius*2,'body and tail clearance');}
    }previous=poses;
@@ -128,4 +128,43 @@ test('pond interactions use the displayed crop and stop accepting taps when hidd
  pond.pause();assert.equal(pond.tap(p.x*1280,p.y*720).water,false);
  pond.fish(ctx,1280,720,1,true,crop);assert.equal(pond.tap(p.x*1280,p.y*720).fish,0);
  pond.dispose();assert.equal(pond.startled,0);assert.equal(pond.tap(400,600).water,false);
+});
+
+test('fish flee the ripple origin from every side instead of blindly speeding up their patrol',()=>{
+ let checked=0,approaching=0,retreating=0;
+ for(const [w,h] of [[390,844],[1280,720],[3840,2160]]){
+  const c=imageCover(3840,2160,w,h,w<=700?.62:.5),crop={x:c.x/3840,y:c.y/2160,w:c.w/3840,h:c.h/2160};
+  for(const i of fishIndices(w))for(const time of [0,10,30,55])for(let side=0;side<8;side++){
+   const school=createFishSchool(),p=school.pose(i,time,false,crop),q=pondPoint(p.x,p.y,w,h,crop),angle=side*Math.PI/4;
+   const x=q.x+Math.cos(angle)*28,y=q.y+Math.sin(angle)*28;
+   if(!inPond(crop.x+x/w*crop.w,crop.y+y/h*crop.h))continue;
+   assert.ok(school.startle(x,y,time,w,h,crop)>0);
+   assert.deepEqual(school.pose(i,time,false,crop),p,'click preserves pose before turning');
+   let previousDistance=Math.hypot(q.x-x,q.y-y),previousHeading=Math.atan2(p.vy*h/crop.h,p.vx*w/crop.w);
+   const headingToward=(p.vx*w/crop.w)*(x-q.x)+(p.vy*h/crop.h)*(y-q.y)>0;if(headingToward)approaching++;
+   for(let n=1;n<=270;n++){
+    school.tick(1/60,time+n/60,w,h,crop,false);const pose=school.pose(i,time+n/60,false,crop),point=pondPoint(pose.x,pose.y,w,h,crop);
+    const distance=Math.hypot(point.x-x,point.y-y),turn=pose.heading-previousHeading;
+    assert.ok(distance>=previousDistance-1e-7,JSON.stringify({w,h,i,time,side,n,distance,previousDistance}));
+    assert.ok(Math.abs(Math.atan2(Math.sin(turn),Math.cos(turn)))<.04,'smooth turn before escape');
+    previousDistance=distance;previousHeading=pose.heading;
+   }
+   if(headingToward&&previousDistance>30)retreating++;
+   checked++;
+  }
+ }
+ assert.ok(checked>400&&approaching>150&&retreating>100,'head-on cases actually retreat, not merely freeze');
+});
+
+test('a new ripple on the opposite side redirects an already escaping fish without position jumps',()=>{
+ const w=1280,h=720,crop={x:0,y:0,w:1,h:1},school=createFishSchool();let time=10;
+ for(let hit=0;hit<6;hit++){
+  const p=school.pose(1,time,false,crop),q=pondPoint(p.x,p.y,w,h,crop),x=q.x+(hit%2?25:-25),y=q.y;
+  assert.ok(school.startle(x,y,time,w,h,crop));assert.deepEqual(school.pose(1,time,false,crop),p);
+  let previous=25;
+  for(let n=0;n<100;n++){
+   time+=1/60;school.tick(1/60,time,w,h,crop,false);const p=school.pose(1,time,false,crop),q=pondPoint(p.x,p.y,w,h,crop),distance=Math.hypot(q.x-x,q.y-y);
+   assert.ok(distance>=previous-1e-7);previous=distance;
+  }
+ }
 });

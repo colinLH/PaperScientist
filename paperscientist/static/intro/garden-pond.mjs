@@ -73,25 +73,40 @@ export function fishScale(w,h,crop){
 }
 
 export function createFishSchool(){
-  const fish=Array.from({length:FISH_BUDGET},()=>({offset:0,speed:0,alarm:0,tail:0}));
+  const fresh=()=>({offset:0,speed:0,alarm:0,tail:0,direction:1,heading:null,threat:null});
+  const fish=Array.from({length:FISH_BUDGET},fresh),turnRate=2.2;
   return {
     pose(i,time,reduced,crop){
       const f=fish[i],p=framedFishPose(i,time,reduced,crop,f.offset);
-      return {...p,alpha:.94,tail:reduced?0:Math.sin(time*(4.4+i*.17)+i*1.71+f.tail)*(.55+Math.min(.25,f.speed*.3))};
+      return {...p,heading:reduced?null:f.heading,alpha:.94,tail:reduced?0:Math.sin(time*(4.4+i*.17)+i*1.71+f.tail)*(.55+Math.min(.25,f.speed*.3))};
     },
     tick(dt,time,w,h,crop,reduced){
-      if(reduced){for(const f of fish){f.alarm=f.speed=0;}return;}
-      // Fixed, bounded integration keeps heading changes smooth even if one
-      // render arrives late. Acceleration follows the current velocity.
+      if(reduced){for(const f of fish){f.alarm=f.speed=0;f.threat=null;}return;}
+      // Turn toward the escape tangent before accelerating. Integrate the full
+      // signed phase (including cruise) so turning/holding cannot drift toward
+      // the ripple through the otherwise time-driven patrol phase.
       const elapsed=clamp(dt,0,.1),steps=Math.max(1,Math.ceil(elapsed/.016)),step=elapsed/steps;
       for(let n=0;n<steps;n++)for(let i=0;i<FISH_BUDGET;i++){
-        const f=fish[i],p=framedFishPose(i,time-elapsed+(n+1)*step,false,crop,f.offset);
+        const f=fish[i],p=framedFishPose(i,time-elapsed+n*step,false,crop,f.offset);
         f.alarm=Math.max(0,f.alarm-step);
         f.speed+=((f.alarm>0?.9:0)-f.speed)*(1-Math.exp(-step*(f.alarm>0?12:2.5)));
         const a=p.rx*w/crop.w,b=p.ry*h/crop.h;
         const curvature=a*b/Math.max(1e-6,a*a*Math.sin(p.angle)**2+b*b*Math.cos(p.angle)**2);
-        const velocity=Math.min(f.speed,Math.max(0,1.6/curvature-p.rate));
-        f.offset=(f.offset+velocity*step)%TAU;f.tail=(f.tail+velocity*step*12)%TAU;
+        const tangent=Math.atan2(b*Math.cos(p.angle)*f.direction,-a*Math.sin(p.angle)*f.direction);
+        f.heading??=Math.atan2(b*Math.cos(p.angle),-a*Math.sin(p.angle));
+        const delta=Math.atan2(Math.sin(tangent-f.heading),Math.cos(tangent-f.heading));
+        f.heading+=clamp(delta,-turnRate*step,turnRate*step);
+        const alignment=Math.max(0,Math.cos(tangent-f.heading))**4;
+        let velocity=f.direction*Math.min(f.speed+p.rate,1.6/curvature)*alignment;
+        if(f.threat){
+          const q=pondPoint(p.x,p.y,w,h,crop),hit=pondPoint(f.threat.x,f.threat.y,w,h,crop),next=p.angle+velocity*step;
+          const dx=a*(Math.cos(next)-Math.cos(p.angle)),dy=b*(Math.sin(next)-Math.sin(p.angle));
+          // Stop at the safe end of this route instead of looping back toward
+          // the disturbance. Repeated taps replace the origin, not the pose.
+          if(Math.hypot(q.x+dx-hit.x,q.y+dy-hit.y)<Math.hypot(q.x-hit.x,q.y-hit.y))velocity=0;
+          if(f.alarm===0&&f.speed<.03)f.threat=null;
+        }
+        f.offset=(f.offset+(velocity-p.rate)*step)%TAU;f.tail=(f.tail+Math.abs(velocity)*step*12)%TAU;
       }
     },
     startle(x,y,time,w,h,crop,reduced=false){
@@ -100,11 +115,18 @@ export function createFishSchool(){
       for(const i of fishIndices(w)){
         const p=this.pose(i,time,false,crop),q=pondPoint(p.x,p.y,w,h,crop);
         if(Math.hypot(q.x-x,q.y-y)>radius)continue;
-        fish[i].alarm=3.6;affected++;
+        const f=fish[i],a=p.rx*w/crop.w,b=p.ry*h/crop.h;
+        const gradient=(q.x-x)*(-a*Math.sin(p.angle))+(q.y-y)*b*Math.cos(p.angle);
+        // The distance derivative chooses the direction away from the tap.
+        // At a stationary point, compare both nearby positions to break ties.
+        const distance=sign=>Math.hypot(q.x-x+a*(Math.cos(p.angle+sign*.02)-Math.cos(p.angle)),q.y-y+b*(Math.sin(p.angle+sign*.02)-Math.sin(p.angle)));
+        const difference=distance(1)-distance(-1);
+        f.direction=Math.abs(gradient)>1e-6?Math.sign(gradient):Math.abs(difference)>1e-6?Math.sign(difference):f.direction;
+        f.threat={x:crop.x+x/w*crop.w,y:crop.y+y/h*crop.h};f.alarm=3.6;affected++;
       }return affected;
     },
     get startled(){return fish.filter(f=>f.alarm>0||f.speed>.03).length;},
-    reset(){for(const f of fish)f.offset=f.speed=f.alarm=f.tail=0;}
+    reset(){for(const f of fish)Object.assign(f,fresh());}
   };
 }
 function clipWater(ctx,w,h,crop){
@@ -143,7 +165,7 @@ export function createGardenPond(){
       ctx.save();clipWater(ctx,w,h,crop);
       for(let i=0;i<count;i++){
         const index=indices[i],p=school.pose(index,time,reduced,crop),a=pondPoint(p.x,p.y,w,h,crop);
-        drawFish(ctx,{...p,...a},Math.atan2(p.vy*h/crop.h,p.vx*w/crop.w),size,index);
+        drawFish(ctx,{...p,...a},p.heading??Math.atan2(p.vy*h/crop.h,p.vx*w/crop.w),size,index);
       }ctx.restore();return count;
     },
     surface(ctx,w,h,time,reduced,crop){
