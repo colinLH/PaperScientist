@@ -36,8 +36,24 @@ def manuscript_layout(phase, context, rule):
     reports = {path: validate(context['store'], context['session']['id'], path,
                              require_pdf=rule.get('require_pdf', True)) for path in sorted(paths)}
     invalid = {path: report for path, report in reports.items() if report.get('status') != 'passed'}
+    diagnostics = []
+    if invalid:
+        result = context.get('tool_result', {})
+        if phase == 'after_tool' and isinstance(result, dict):
+            # The runtime wraps rejected tool results in HarnessViolation. Retain
+            # the actual compiler/layout failure so repair is possible without
+            # weakening the gate or mistaking an after-tool failure for a deadlock.
+            if result.get('status') == 'layout_blocked':
+                diagnostics.extend(f"{i.get('code')}: {i.get('message')}"
+                                   for i in result.get('layout', {}).get('issues', [])[:6])
+            elif result.get('status') in {'error', 'unavailable'}:
+                diagnostics.append(str(result.get('message') or result.get('log') or result['status'])[-2000:])
+        for path, report in invalid.items():
+            diagnostics.extend(f"{path}: {i.get('code')}: {i.get('message')}"
+                               for i in report.get('issues', [])[:3])
     return {'ok': not invalid, 'reports': reports,
-            'reason': 'Manuscript layout is not validated: ' + ', '.join(invalid) if invalid else ''}
+            'reason': ('Manuscript layout is not validated: ' + ', '.join(invalid) +
+                       ('\n' + '\n'.join(diagnostics) if diagnostics else '')) if invalid else ''}
 
 
 def benchmark_evidence(phase, context, rule):

@@ -52,6 +52,53 @@ class LayoutTests(unittest.IsolatedAsyncioTestCase):
                 with (self.root/'section.tex').open('a') as f: f.write('Changed after compile.')
                 self.assertEqual(layout.validate(self.store,'layout-test','main.tex')['issues'][0]['code'],'stale_compile')
 
+    async def test_sibling_entry_points_keep_independent_contracts_and_pdf_receipts(self):
+        from paperscientist.research_harnesses import manuscript_layout
+        self.paper()
+        (self.root/'alternate.tex').write_text((self.root/'main.tex').read_text())
+        original = layout.load_contract(self.root/'main.tex')
+        layout.configure(self.store,'layout-test','alternate.tex',min_figure_font_pt=9)
+        self.assertEqual(layout.load_contract(self.root/'main.tex'), original)
+        self.assertEqual(layout.load_contract(self.root/'alternate.tex')['min_figure_font_pt'],9)
+        for name in ('main.tex','alternate.tex'):
+            result = await compile_latex(self.store,'layout-test',name)
+            if result['status'] == 'unavailable':
+                self.skipTest('A TeX compiler is required')
+            self.assertEqual(result['status'],'success',result)
+        # Creating the second PDF must not invalidate the first entry's receipt.
+        for name in ('main.tex','alternate.tex'):
+            self.assertEqual(layout.validate(self.store,'layout-test',name)['status'],'passed')
+        check = manuscript_layout('completion',{'store':self.store,'session':{'id':'layout-test'},
+            'actions':[{'name':'compile_latex','status':'success','input':{'main_path':n}}
+                       for n in ('main.tex','alternate.tex')]},{})
+        self.assertTrue(check['ok'],check)
+        # A changed source still invalidates the appropriate PDF; no gate is waived.
+        with (self.root/'alternate.tex').open('a') as f: f.write('\n% changed source\n')
+        self.assertEqual(layout.validate(self.store,'layout-test','alternate.tex')['issues'][0]['code'],'stale_compile')
+
+    def test_legacy_nondefault_entry_keeps_its_contract_when_main_is_added(self):
+        self.paper()
+        legacy=json.loads((self.root/'layout_contract.json').read_text())
+        legacy.update(main='legacy.tex',source='inferred_existing')
+        legacy.pop('revision_id',None)
+        (self.root/'layout_contract.json').write_text(json.dumps(legacy))
+        (self.root/'legacy.tex').write_text((self.root/'main.tex').read_text())
+        self.assertEqual(layout.load_contract(self.root/'legacy.tex'),legacy)
+        layout.configure(self.store,'layout-test','main.tex')
+        self.assertEqual(layout.load_contract(self.root/'legacy.tex'),legacy)
+        self.assertEqual(layout.preflight(self.store,'layout-test','main.tex')['status'],'ready')
+
+    def test_after_tool_gate_retains_real_compile_diagnostics(self):
+        from paperscientist.research_harnesses import manuscript_layout
+        self.paper()
+        check=manuscript_layout('after_tool',{'store':self.store,'session':{'id':'layout-test'},
+            'tool_name':'compile_latex','tool_input':{'main_path':'main.tex'},
+            'tool_result':{'status':'layout_blocked','layout':{'issues':[
+                {'code':'tex_overflow','message':'Overfull box at line 42'}]}}},{})
+        self.assertFalse(check['ok'])
+        self.assertIn('tex_overflow: Overfull box at line 42',check['reason'])
+        self.assertIn('compile_required',check['reason'])
+
     async def test_actual_class_columns_override_is_blocked(self):
         self.paper('single',class_options='11pt,a4paper,twocolumn')
         result = await self.compile()

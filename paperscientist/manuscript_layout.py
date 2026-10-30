@@ -29,6 +29,24 @@ def _write(path, value):
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _contract_path(main):
+    """Keep legacy single-entry projects readable; isolate sibling entry points."""
+    specific = main.parent / f"layout_contract.{main.name}.json"
+    legacy = main.parent / CONTRACT_NAME
+    if specific.exists():
+        return specific
+    if legacy.exists():
+        # Invalid JSON must remain an error, not become a fresh inferred contract.
+        owner = json.loads(legacy.read_text(encoding="utf-8")).get("main")
+        return legacy if owner == main.name else specific
+    return legacy if main.name == "main.tex" else specific
+
+
+def _report_path(main):
+    return main.parent / ("layout_report.json" if _contract_path(main).name == CONTRACT_NAME
+                          else f"layout_report.{main.name}.json")
+
+
 def _history_table(db):
     db.execute("""CREATE TABLE IF NOT EXISTS manuscript_layout_history (
         id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL,
@@ -54,7 +72,7 @@ def _persist_contract(store, sid, main, contract):
         contract["revision_id"] = cursor.lastrowid
         db.execute("UPDATE manuscript_layout_history SET contract=? WHERE id=?",
                    (json.dumps(contract, ensure_ascii=False), cursor.lastrowid))
-        _write(main.parent / CONTRACT_NAME, contract)
+        _write(_contract_path(main), contract)
 
 
 def _user_evidence(store, sid, quote, after_id=0):
@@ -174,7 +192,7 @@ def configure(store, sid, main_path, columns="single", paper="a4", margin_mm=24.
                 "rules": rule_config, "updated_at": time.time()}
     if contract["source"] not in {"user", "inferred_existing", "default"}:
         raise ValueError("source must be user, inferred_existing or default")
-    destination = main.parent / CONTRACT_NAME
+    destination = _contract_path(main)
     previous = _recorded_contract(store, sid, main)
     legacy = load_contract(main) if not previous and destination.is_file() else None
     prior = previous or legacy
@@ -203,7 +221,7 @@ def configure(store, sid, main_path, columns="single", paper="a4", margin_mm=24.
 
 
 def load_contract(main):
-    path = main.parent / CONTRACT_NAME
+    path = _contract_path(main)
     if not path.is_file():
         return None
     contract = json.loads(path.read_text(encoding="utf-8"))
@@ -274,6 +292,9 @@ def _inputs(main, sources, workspace):
     local = [p for p in main.parent.rglob('*') if p.is_file() and p.suffix.lower()
              in {'.tex', '.sty', '.cls', '.bib', '.pdf', '.png', '.jpg', '.jpeg'}
              and not p.name.startswith('_ps_layout_') and p != main.with_suffix('.pdf')
+             # A sibling entry's output is not an input of this manuscript. An
+             # explicitly included PDF was already bound by includegraphics above.
+             and not (p.suffix.lower() == '.pdf' and p.with_suffix('.tex').is_file())
              and p.resolve().is_relative_to(workspace.resolve())]
     if len(local) > 1000:
         raise ValueError('More than 1000 manuscript input files; isolate the paper project before compiling')
@@ -325,7 +346,8 @@ def preflight(store, sid, main_path):
 
 def prepare_compile(main):
     """Compile a wrapper so TeX itself reports effective geometry at every shipout."""
-    wrapper = main.parent / "_ps_layout_compile.tex"
+    suffix = "" if main.name == "main.tex" else "_" + hashlib.sha256(main.name.encode()).hexdigest()[:12]
+    wrapper = main.parent / f"_ps_layout{suffix}_compile.tex"
     wrapper.write_text(r"""\makeatletter
 \newcommand{\PSLayoutMeasurement}{%
 \typeout{PSLAYOUT:page=\thepage;columns=\if@twocolumn2\else1\fi;paperwidth=\the\paperwidth;paperheight=\the\paperheight;textwidth=\the\textwidth;columnwidth=\the\columnwidth;textheight=\the\textheight;columnsep=\the\columnsep;left=\the\oddsidemargin;top=\the\topmargin;headheight=\the\headheight;headsep=\the\headsep;END}%
@@ -477,7 +499,7 @@ def validate_compiled(store, sid, main_path, pdf, log, before):
               "issues": issues, "contract": contract, "pages": pages, "measurements": measurements,
               "inputs": after.get("inputs", {}), "pdf_sha256": _digest(pdf),
               "validated_at": time.time(), "note": "Compiled geometry and PDF bounds checked. Scientific validity and visual overlap review remain separate."}
-    _write(main.parent / "layout_report.json", report)
+    _write(_report_path(main), report)
     return report
 
 
@@ -487,7 +509,7 @@ def validate(store, sid, main_path, require_pdf=True):
     check = preflight(store, sid, main_path)
     if check["status"] == "blocked" or not require_pdf:
         return check
-    report_path = main.parent / "layout_report.json"
+    report_path = _report_path(main)
     pdf = main.with_suffix(".pdf")
     if not report_path.is_file() or not pdf.is_file():
         return {**check, "status": "not_compiled", "issues": [{"code": "compile_required", "message": "Run compile_latex with the saved contract; source checks alone cannot verify layout."}]}
