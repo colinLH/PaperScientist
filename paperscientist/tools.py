@@ -254,6 +254,8 @@ class ToolSet:
             if len(content.encode()) > 2_000_000:
                 raise ValueError("File content exceeds 2MB")
             file = store.file(sid, path)
+            from .benchmarks import protect_benchmark_file
+            protect_benchmark_file(store, sid, path)
             if store.get_agent(sid).get("isolated_review") and file.is_relative_to(store.workspace(sid) / "review_packet"):
                 raise PermissionError("The review source packet is immutable; write notes to a separate file")
             file.parent.mkdir(parents=True, exist_ok=True)
@@ -265,6 +267,8 @@ class ToolSet:
         def edit_file(path: str, old: str, new: str, append: bool = False) -> dict:
             """Edit an existing UTF-8 file. Replace exactly one occurrence of old, or append new with append=True and old=''. Read first; use small complete chunks."""
             file = store.file(sid, path)
+            from .benchmarks import protect_benchmark_file
+            protect_benchmark_file(store, sid, path)
             if store.get_agent(sid).get("isolated_review") and file.is_relative_to(store.workspace(sid) / "review_packet"):
                 raise PermissionError("The review source packet is immutable")
             content = file.read_text(encoding="utf-8")

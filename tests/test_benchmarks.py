@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 from paperscientist.artifacts import run_python
 from paperscientist.benchmarks import (
     audit_benchmarks, collect_benchmark_source, discover_benchmarks,
-    plan_benchmark, record_benchmark_result, register_benchmark, run_benchmark,
+    plan_benchmark, protect_benchmark_file, record_benchmark_result, register_benchmark, run_benchmark,
 )
 from paperscientist.store import Store
 
@@ -96,6 +96,61 @@ Path("results.json").write_text(json.dumps(rows), encoding="utf-8")
         register_benchmark(self.store, self.sid, {**self.manifest, "id": "custom-domain", "keywords": ["marine acoustics"]})
         custom = discover_benchmarks("marine acoustics classification", self.store, self.sid)
         self.assertEqual(custom["candidates"][0]["id"], "custom-domain")
+
+    async def test_revision_preserves_failed_history_and_requires_fresh_complete_run(self):
+        old = self.plan(case_ids=["0", "1"])
+        with self.assertRaises(ValueError):
+            await run_benchmark(self.store, self.sid, old["plan_id"], True)
+        old_bytes = self.store.file(self.sid, old["path"]).read_bytes()
+        revised = self.plan(supersedes=[old["plan_id"]], revision_reason="Correct two-case coverage mismatch",
+                            prior_exposure="Six-case pilot has already been observed")
+        before = audit_benchmarks(self.store, self.sid)
+        self.assertEqual(before["pending_plans"], [revised["plan_id"]])
+        self.assertFalse(before["all_selected_protocols_complete"])
+        await run_benchmark(self.store, self.sid, revised["plan_id"], True)
+        after = audit_benchmarks(Store(Path(self.temp.name)), self.sid)
+        self.assertTrue(after["all_selected_protocols_complete"], after)
+        self.assertEqual(after["superseded_protocols"][0]["plan_id"], old["plan_id"])
+        self.assertEqual(after["revisions"][0]["prior_exposure"], "Six-case pilot has already been observed")
+        self.assertEqual(self.store.file(self.sid, old["path"]).read_bytes(), old_bytes)
+        self.assertFalse(after["official_benchmark_complete"])
+
+    async def test_revision_handles_changed_old_input_but_never_modified_result_receipt(self):
+        old = self.plan()
+        old_result = await run_benchmark(self.store, self.sid, old["plan_id"], True)
+        self.store.file(self.sid, "evaluate.py").write_text(self.script + "# later change\n")
+        revised = self.plan(supersedes=[old["plan_id"]], revision_reason="Correct evaluator",
+                            prior_exposure="Exploratory rerun after observed pilot")
+        await run_benchmark(self.store, self.sid, revised["plan_id"], True)
+        audit = audit_benchmarks(self.store, self.sid)
+        self.assertTrue(audit["all_selected_protocols_complete"], audit)
+        self.assertFalse(audit["historical_integrity_valid"])
+        self.assertTrue(any(r.get("historical_input_failure") for r in audit["results"]))
+        self.store.file(self.sid, old_result["result_snapshot_path"]).write_text("[]")
+        damaged = audit_benchmarks(self.store, self.sid)
+        self.assertFalse(damaged["integrity_valid"])
+        self.assertFalse(damaged["all_selected_protocols_complete"])
+
+    def test_revision_rejects_scope_reduction_and_missing_exposure(self):
+        old = self.plan()
+        revision = dict(supersedes=[old["plan_id"]], revision_reason="Fix", prior_exposure="Pilot observed")
+        for changes in ({"case_ids": ["0"]}, {"methods": ["parity"]}, {"seeds": [0]},
+                        {"prior_exposure": ""}, {"decision": "not_applicable"},
+                        {"supersedes": ["bench_missing"]}, {"supersedes": [old["plan_id"], old["plan_id"]]}):
+            with self.subTest(changes=changes), self.assertRaises((ValueError, FileNotFoundError)):
+                self.plan(**{**revision, **changes})
+        self.write("other-cases.json", [{"case_id": str(i), "split": "test", "target": 0} for i in range(6)])
+        with self.assertRaisesRegex(ValueError, "dataset_sha256"):
+            self.plan(**revision, dataset_path="other-cases.json")
+
+    def test_frozen_inputs_and_receipts_require_new_paths(self):
+        self.write("dependency.json", {"setting": 1})
+        plan = self.plan(input_paths=["dependency.json"])
+        for path in ("evaluate.py", "cases.json", "dependency.json", plan["path"], plan["manifest_path"]):
+            with self.subTest(path=path), self.assertRaises(PermissionError):
+                protect_benchmark_file(self.store, self.sid, path)
+        protect_benchmark_file(self.store, self.sid, "revision/evaluate.py")
+        protect_benchmark_file(self.store, self.sid, "results.json")
 
     async def test_auxiliary_input_hash_is_checked_before_running(self):
         self.write("raw-data.json", [1, 2, 3])

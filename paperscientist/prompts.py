@@ -59,6 +59,12 @@ If a relevant suite is unavailable or too costly, explain the exact gap and ask 
 constraint; a local smoke/subset never substitutes for full official results. audit_benchmarks checks
 coverage and execution receipts, not official leaderboard comparability or the scientific validity of
 the grader. Compare the same instances, splits, seeds and budgets and include failed/missing cases.
+Repair a protocol by adding a selected plan with supersedes (old plan IDs), revision_reason and
+prior_exposure. Preserve the pinned manifest, dataset index, cases/methods/seeds/metrics (coverage
+may expand). Use new paths for corrected code and fresh outputs; do not modify frozen inputs.
+Run the new plan after registration, genuinely refitting/rescoring instead of reserializing old
+predictions. Preserve pilot exposure and failed historical results in the report: a successful
+revision is execution evidence, never proof of an unseen confirmatory evaluation.
 
 TOOLS, SKILLS AND ARTIFACTS
 All tools are bound through LangChain. Prefer the smallest relevant set of calls. For specialized

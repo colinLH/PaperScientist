@@ -51,6 +51,22 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
     async def spawn(self, role='design', **extra):
         return await self.tools['spawn_agent'].ainvoke({'task_name':'task', 'message':'bounded task', 'role':role, **extra})
 
+    async def test_file_tools_cannot_modify_registered_benchmark_evidence(self):
+        from paperscientist.benchmarks import register_benchmark
+        record = register_benchmark(self.service.store, self.parent['id'], {
+            'id': 'guard-test', 'title': 'Guard fixture', 'version': 'v1', 'task': 'File guard test',
+            'source_url': 'https://example.org/test', 'license_url': 'https://example.org/license',
+            'license': 'fixture', 'license_notes': 'Local fixture', 'provenance': 'local_synthetic',
+            'splits': ['test'], 'metrics': {'accuracy': 'Fixture accuracy'},
+        })
+        path = record['path']
+        before = self.service.store.file(self.parent['id'], path).read_bytes()
+        for name, args in [('write_file', {'path': path, 'content': '{}', 'overwrite': True}),
+                           ('edit_file', {'path': path, 'old': '', 'new': ' ', 'append': True})]:
+            with self.subTest(tool=name), self.assertRaisesRegex(PermissionError, 'append-only'):
+                await self.tools[name].ainvoke(args)
+        self.assertEqual(self.service.store.file(self.parent['id'], path).read_bytes(), before)
+
     async def wait(self, child):
         await asyncio.wait_for(self.service.scheduler.tasks[child['id']], 8)
         return self.service.store.get_agent(child['id'])

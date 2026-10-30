@@ -211,6 +211,8 @@ def plan_benchmark(store, sid, benchmark_id: str, protocol: dict):
     for field in ("rationale", "claim", "task_match"):
         plan[field] = _text(plan.get(field), field)
     if plan.get("decision") == "not_applicable":
+        if plan.get("supersedes"):
+            raise ValueError("A selected protocol can only be superseded by another selected protocol")
         return _save(store, sid, f"benchmarks/plans/{plan['plan_id']}.json", plan, "benchmark_protocol")
     if plan.get("decision") != "selected":
         raise ValueError("decision must be selected or not_applicable")
@@ -269,7 +271,59 @@ def plan_benchmark(store, sid, benchmark_id: str, protocol: dict):
     plan.update(script_sha256=_hash(store.file(sid, plan["script_path"])), dataset_sha256=_hash(store.file(sid, plan["dataset_path"])),
                 expected_evaluations=expected, split_index_cases=len(all_ids),
                 budget_enforcement={"timeout_seconds": "process-tree timeout", "max_evaluations": "protocol and coverage validation", "hardware": "declared, not a resource quota"})
+    _validate_revision(store, sid, plan)
     return _save(store, sid, f"benchmarks/plans/{plan['plan_id']}.json", plan, "benchmark_protocol")
+
+
+def _validate_revision(store, sid, plan):
+    """A correction adds a receipt; it cannot erase failures or reduce coverage."""
+    parents = plan.get("supersedes", [])
+    if not isinstance(parents, list) or not all(isinstance(p, str) for p in parents) or len(parents) != len(set(parents)):
+        raise ValueError("supersedes must be a list of unique existing plan IDs")
+    if not parents:
+        return
+    if plan.get("decision") != "selected":
+        raise ValueError("Only a selected protocol may supersede earlier plans")
+    _text(plan.get("revision_reason"), "revision_reason")
+    _text(plan.get("prior_exposure"), "prior_exposure")
+    for pid in parents:
+        old = _verified_record(store, sid, f"benchmarks/plans/{identifier(pid)}.json", "benchmark_protocol")
+        if old["decision"] != "selected" or old["benchmark_id"] != plan["benchmark_id"]:
+            raise ValueError("Revisions must replace selected protocols for the same benchmark")
+        if old["created_ns"] >= plan["created_ns"]:
+            raise ValueError("Revisions must follow their predecessors")
+        for field in ("split", "manifest_sha256", "dataset_sha256"):
+            if old[field] != plan[field]:
+                raise ValueError(f"Revision cannot change {field}; register a separate evaluation")
+        for field in ("case_ids", "methods", "seeds", "metrics"):
+            if not set(old[field]).issubset(plan[field]):
+                raise ValueError(f"Revision cannot drop {field}")
+        if old["scope"] == "full_split" and plan["scope"] != "full_split":
+            raise ValueError("Revision cannot reduce full_split scope")
+
+
+def protect_benchmark_file(store, sid, path):
+    """Guard ordinary file tools; Python remains trusted execution, audited by hashes.
+
+    Historical inputs stay protected too. Repairs must use new paths, so a
+    revision never silently changes the meaning of an earlier run.
+    """
+    target = store.file(sid, path)
+    for artifact in store.artifacts(sid):
+        if not artifact["kind"].startswith("benchmark_"):
+            continue
+        record_path = Path(artifact["path"])
+        if target == record_path.resolve():
+            raise PermissionError("Registered benchmark evidence is append-only; use a new path")
+        if artifact["kind"] != "benchmark_protocol":
+            continue
+        rel = str(record_path.relative_to(store.workspace(sid)))
+        plan = _verified_record(store, sid, rel, "benchmark_protocol")
+        if plan["decision"] != "selected":
+            continue
+        inputs = [plan["script_path"], plan["dataset_path"], plan["manifest_path"], *plan.get("input_sha256", {})]
+        if target in {store.file(sid, p) for p in inputs}:
+            raise PermissionError("Frozen benchmark input is immutable; copy to a new path and register a revision with supersedes, revision_reason and prior_exposure")
 
 
 def _plan(store, sid, plan_id):
@@ -411,6 +465,19 @@ def audit_benchmarks(store, sid):
     results, decisions, pending, attempts = [], [], [], []
     artifacts = store.artifacts(sid)
     recorded_plans = set()
+    plans, superseded_by = {}, {}
+    for artifact in artifacts:
+        if artifact["kind"] != "benchmark_protocol":
+            continue
+        path = str(Path(artifact["path"]).relative_to(store.workspace(sid)))
+        try:
+            plan = _verified_record(store, sid, path, "benchmark_protocol")
+            _validate_revision(store, sid, plan)
+            plans[plan["plan_id"]] = plan
+            for parent in plan.get("supersedes", []):
+                superseded_by.setdefault(parent, []).append(plan["plan_id"])
+        except (ValueError, KeyError, TypeError, OSError) as exc:
+            results.append({"path": path, "valid": False, "protocol_complete": False, "error": str(exc)})
     for artifact in artifacts:
         if artifact["kind"] != "benchmark_attempt":
             continue
@@ -429,33 +496,47 @@ def audit_benchmarks(store, sid):
         try:
             record = _verified_record(store, sid, path, "benchmark_result")
             recorded_plans.add(record["plan_id"])
-            plan = _plan(store, sid, record["plan_id"])
+            # Verify durable records even for superseded plans. Supersession may
+            # explain a changed input, never a modified receipt or result.
+            plan = _verified_record(store, sid, f"benchmarks/plans/{identifier(record['plan_id'])}.json", "benchmark_protocol")
             snapshot_path = record["result_snapshot_path"]
             _verified_record(store, sid, snapshot_path, "benchmark_result_data")
             if _hash(store.file(sid, snapshot_path)) != record["result_sha256"]:
                 raise ValueError("Recorded result hash changed")
             _execution(store, sid, plan, record["result_path"], record["run_id"], record["result_sha256"])
+            try:
+                _plan(store, sid, record["plan_id"])
+            except (ValueError, OSError) as exc:
+                if record["plan_id"] not in superseded_by:
+                    raise
+                results.append({"plan_id": record["plan_id"], "run_id": record["run_id"],
+                                "valid": False, "protocol_complete": False, "historical_input_failure": True,
+                                "error": str(exc)})
+                continue
             summary = _evaluate(store, sid, plan, snapshot_path)
             results.append({"plan_id": record["plan_id"], "run_id": record["run_id"], "scope": record["scope"],
                             "provenance": record["provenance"], "valid": True, **summary})
         except (ValueError, KeyError, TypeError, OSError) as exc:
             results.append({"path": path, "plan_id": artifact["metadata"].get("plan_id"),
                             "valid": False, "protocol_complete": False, "error": str(exc)})
-    for artifact in artifacts:
-        if artifact["kind"] != "benchmark_protocol":
-            continue
-        path = str(Path(artifact["path"]).relative_to(store.workspace(sid))).replace("\\", "/")
-        try:
-            plan = _verified_record(store, sid, path, "benchmark_protocol")
-            if plan["decision"] == "not_applicable":
-                decisions.append({"benchmark_id": plan["benchmark_id"], "decision": plan["decision"], "rationale": plan["rationale"]})
-            elif plan["plan_id"] not in recorded_plans:
-                pending.append(plan["plan_id"])
-        except (ValueError, KeyError, TypeError, OSError) as exc:
-            results.append({"path": path, "valid": False, "protocol_complete": False, "error": str(exc)})
-    latest = {result["plan_id"]: result for result in results if result.get("plan_id")}
-    integrity_valid = all(record.get("valid") for record in [*results, *attempts])
+    for plan in plans.values():
+        if plan["decision"] == "not_applicable":
+            decisions.append({"benchmark_id": plan["benchmark_id"], "decision": plan["decision"], "rationale": plan["rationale"]})
+        elif plan["plan_id"] not in recorded_plans and plan["plan_id"] not in superseded_by:
+            pending.append(plan["plan_id"])
+    for record in results + attempts:
+        record["superseded_by"] = superseded_by.get(record.get("plan_id"), [])
+    latest = {result["plan_id"]: result for result in results if result.get("plan_id") and not result["superseded_by"]}
+    historical_integrity_valid = all(record.get("valid") for record in [*results, *attempts])
+    integrity_valid = all(record.get("valid") or (record.get("superseded_by") and record.get("historical_input_failure"))
+                          for record in [*results, *attempts])
     return {"results": results, "attempts": attempts, "not_applicable": decisions, "pending_plans": pending,
             "integrity_valid": integrity_valid,
+            "historical_integrity_valid": historical_integrity_valid,
+            "superseded_protocols": [{"plan_id": pid, "superseded_by": children,
+                                      "had_result": pid in recorded_plans} for pid, children in superseded_by.items()],
+            "revisions": [{"plan_id": p["plan_id"], "supersedes": p["supersedes"],
+                           "revision_reason": p["revision_reason"], "prior_exposure": p["prior_exposure"]}
+                          for p in plans.values() if p.get("supersedes")],
             "all_selected_protocols_complete": bool(latest) and not pending and integrity_valid and all(r.get("protocol_complete") for r in latest.values()),
             "official_benchmark_complete": False}

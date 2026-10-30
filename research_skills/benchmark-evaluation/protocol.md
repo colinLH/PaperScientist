@@ -77,6 +77,29 @@ Each `(case_id, method, seed)` occurs once. `status` is `ok`, `error` or `timeou
 
 `audit_benchmarks()` independently recomputes coverage and summary metrics. `protocol_complete` means every planned evaluation has a valid row and no evaluator errors; a zero success rate can still be a complete evaluation. `official_benchmark_complete` stays false because this generic harness cannot certify the semantic validity of a grader, official inventory, leakage controls or leaderboard compliance. Report the actual protocol scope and link evidence rather than promising an official score certification.
 
+## Corrections and prior exposure
+
+Correct an erroneous selected protocol by registering a new selected protocol with
+`supersedes: ["bench_..."]`, a nonempty `revision_reason`, and `prior_exposure`
+describing which data/results were already observed. The new plan must use the
+same pinned manifest, split and dataset index hash, and must retain all prior
+cases, methods, seeds and metrics; coverage may expand. It cannot turn a selected
+evaluation into a not-applicable decision. New datasets require separate plans.
+
+Use new paths for corrected code and fresh outputs. Ordinary write/edit tools
+protect registered records and frozen inputs, including historical inputs.
+Python execution is trusted and is not a filesystem sandbox; audits still detect
+input changes. Never rewrite a saved plan, execution receipt, result or hash.
+
+The audit lists superseded protocols, reasons, exposure and historical failures.
+`integrity_valid` covers current protocols and all durable receipts;
+`historical_integrity_valid` also includes superseded input failures. A replacement
+must actually run after registration and pass the same coverage and hash checks.
+Changed or missing historical receipts/results still block completion. Superseded
+input failures remain visible and do not become successful historical runs.
+Reusing an exposed dataset is an exploratory replication, not fresh confirmatory
+evidence. Reserializing old predictions is not refitting or rescoring a model.
+
 ## Reproducible adapter smoke
 
 Run `python research_skills/benchmark-evaluation/scripts/smoke.py` from the repository root. This performs 24 actual local evaluations over six synthetic parity cases, two trivial methods and two seeds, then reopens the store and audits persisted receipts. It writes `.test-output/benchmark-harness/smoke-report.json`. Optional `--collect-primary-source` also collects the official ScienceAgentBench README with its source hash; it does not run ScienceAgentBench or download restricted data. No model/API call is involved and no official benchmark performance is claimed.
