@@ -14,7 +14,7 @@ from langgraph.graph import END, START, StateGraph
 
 from .config import Settings, create_model
 from .agent_profiles import AgentProfileRegistry, HarnessViolation, permits
-from .context import ContextManager, estimate_tokens
+from .context import ContextManager, estimate_tokens, agent_status
 from .memory import MemoryManager, text_content
 from .mcp import load_tools
 from . import prompts
@@ -103,7 +103,7 @@ class AgentService:
             "session_id":session["id"], "project_id":session["project_id"], "project":project,
             "memory":rendered, "execution_enabled":settings.allow_execution,
             "workspace":"All relative file paths resolve to this session's isolated workspace.",
-            "active_skills":skills, "subagents":self.store.agents(session["id"]),
+            "active_skills":skills, "subagents":[agent_status(a) for a in self.store.agents(session["id"])],
             "capability_profile":profile.metadata(),
         })
         prompt += "\nAVAILABLE SKILLS (load_skill to read):\n" + catalog.listing()

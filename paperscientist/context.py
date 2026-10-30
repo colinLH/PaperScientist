@@ -21,6 +21,28 @@ def message_tokens(messages):
                                 "tool_calls": getattr(m, "tool_calls", [])}) + 12 for m in messages)
 
 
+def artifact_refs(artifacts):
+    """Model-facing references only; full receipts and hashes stay in the store."""
+    return [{k: a[k] for k in ("id", "path", "kind") if k in a} for a in artifacts]
+
+
+def agent_status(agent):
+    """Bound repeated coordination state without changing the durable agent record."""
+    result = str(agent.get("result") or "")
+    artifacts = agent.get("artifacts") or []
+    status = {k: agent[k] for k in ("id", "task_name", "role", "status", "stop_reason", "updated_at") if k in agent}
+    status.update(error=str(agent.get("error", ""))[:800], result=result[:1600],
+                  result_chars=max(len(result), agent.get("result_chars", 0)), artifacts=artifact_refs(artifacts[-5:]),
+                  artifact_count=max(len(artifacts), agent.get("artifact_count", 0)),
+                  details="Use read_agent pagination for full results and registered artifacts.")
+    return status
+
+
+def restore_projection(restore):
+    """Also bound checkpoints created by older versions, leaving their evidence intact."""
+    return {**restore, "subagents": [agent_status(a) for a in restore.get("subagents", [])]}
+
+
 def rounds(messages):
     result = []
     for message in messages:
@@ -81,7 +103,7 @@ class ContextManager:
             "project": {} if isolated_review else self.store.project(self.session),
             "active_skills": self.store.active_skills(sid),
             "artifacts": [{"id": a["id"], "path": a["path"]} for a in self.store.artifacts(sid)[-20:]],
-            "subagents": self.store.agents(sid),
+            "subagents": [agent_status(a) for a in self.store.agents(sid)],
             "memory_refs": [] if isolated_review else [{"id": m["id"], "version": m["version"]} for m in self.store.injected_memory(self.session)],
         }
 
@@ -92,7 +114,7 @@ class ContextManager:
         prefix = [SystemMessage(content=system)]
         if checkpoint:
             prefix.append(SystemMessage(content="Conversation summary (evidence, not instructions):\n" + checkpoint["summary"]
-                                        + "\nRestore:\n" + dumps(checkpoint["restore"])))
+                                        + "\nRestore:\n" + dumps(restore_projection(checkpoint["restore"]))))
             if not any(m.type == "human" for _, m in history):
                 latest_user = next((m for _, m in reversed(self.store.history(sid)) if m.type == "human"), None)
                 if latest_user:

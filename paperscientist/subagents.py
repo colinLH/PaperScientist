@@ -15,6 +15,7 @@ from langchain_core.tools import tool
 
 from .memory import text_content
 from .agent_profiles import COORDINATION_TOOLS
+from .context import agent_status, artifact_refs
 from .store import dumps, now
 
 
@@ -191,8 +192,8 @@ class Scheduler:
 
         @tool
         def list_agents() -> list:
-            """List this session's children, status, results and IDs after resume or compaction."""
-            return self.store.agents(parent_id)
+            """List bounded child status/result previews. Use read_agent pagination for full evidence."""
+            return [agent_status(a) for a in self.store.agents(parent_id)]
 
         @tool
         async def wait_agent(target: str = "", timeout: int = 30) -> list:
@@ -201,14 +202,26 @@ class Scheduler:
             tasks = [self.tasks[a["id"]] for a in agents if a["id"] in self.tasks and not self.tasks[a["id"]].done()]
             if tasks:
                 await asyncio.wait(tasks, timeout=max(0, min(timeout, 60)), return_when=asyncio.FIRST_COMPLETED)
-            return [self.find(parent_id, a["id"]) for a in agents]
+            return [agent_status(self.find(parent_id, a["id"])) for a in agents]
 
         @tool
-        def read_agent(target: str) -> dict:
-            """Inspect a child's result, raw recent evidence and artifact IDs before integrating its work."""
+        def read_agent(target: str, artifact_offset: int = 0, artifact_limit: int = 10,
+                       result_offset: int = 0, max_chars: int = 6000, history_limit: int = 4) -> dict:
+            """Read paginated child results and artifact references. Follow next offsets for omitted evidence; recent history is a bounded preview."""
             agent = self.find(parent_id, target)
-            return {**agent, "artifacts": self.store.artifacts(agent["id"]),
-                    "recent_history": [{"id":mid,"role":m.type,"content":m.content} for mid,m in self.store.history(agent["id"])[-8:]]}
+            artifacts = self.store.artifacts(agent["id"])
+            start, limit = max(0, artifact_offset), max(1, min(artifact_limit, 40))
+            offset, chars = max(0, result_offset), max(200, min(max_chars, 12000))
+            result = str(agent.get("result") or "")
+            count = max(0, min(history_limit, 8))
+            history = self.store.history(agent["id"])[-count:] if count else []
+            per_message = max(200, chars // max(1, len(history)))
+            return {**agent_status(agent), "result": result[offset:offset+chars],
+                    "next_result_offset": offset+chars if offset+chars < len(result) else None,
+                    "artifacts": artifact_refs(artifacts[start:start+limit]), "artifact_count": len(artifacts),
+                    "next_artifact_offset": start+limit if start+limit < len(artifacts) else None,
+                    "recent_history": [{"id":mid,"role":m.type,"content":text_content(m)[:per_message],
+                                        "content_chars":len(text_content(m))} for mid,m in history]}
 
         @tool
         async def followup_task(target: str, message: str) -> dict:
@@ -216,7 +229,7 @@ class Scheduler:
             agent = self.find(parent_id, target)
             if self.service.profiles.get(agent['role']).name not in profile.children:
                 raise PermissionError('This profile no longer permits that child role')
-            return self.launch(parent, settings, agent, message)
+            return agent_status(self.launch(parent, settings, agent, message))
 
         @tool
         def send_message(target: str, message: str) -> dict:

@@ -11,7 +11,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from paperscientist.api import create_app
 from paperscientist.artifacts import assemble_manuscript, plot_results, run_python
 from paperscientist.config import Settings
-from paperscientist.context import ContextManager, ContextOverflow, micro_compact
+from paperscientist.context import ContextManager, ContextOverflow, micro_compact, message_tokens
 from paperscientist.memory import MemoryManager
 from paperscientist.migrate import import_chats
 from paperscientist.runtime import AgentService
@@ -151,6 +151,58 @@ class AsyncTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any("尚无测量结论" in str(m.content) for m in built))
         built_again=await context.build("You are a researcher",FakeModel())
         self.assertIn("继续设计消融",str(built_again[-1].content))
+
+    async def test_large_child_state_and_legacy_restore_are_bounded_without_data_loss(self):
+        agent = {"id":"large-child", "parent_id":"session", "task_name":"design", "role":"design",
+                 "status":"interrupted", "result":"bounded result "*8000,
+                 "capabilities":{"inherited_harnesses":[{"name":"implementation_tests"}]},
+                 "artifacts":[{"id":str(i), "path":f"source/{i}.py", "kind":"source",
+                               "metadata":{"evidence":"large receipt "*1000}} for i in range(150)]}
+        self.store.save_agent(agent)
+        mid = self.store.append("session", HumanMessage(content="Retain the failed design checks."))
+        # Emulate a checkpoint from before coordination state was bounded.
+        restore = {"subagents":[agent], "artifacts":[]}
+        self.store.save_checkpoint("session", mid, "Design remains interrupted; tests must pass.", restore)
+        context = ContextManager(self.store, self.session, self.settings.with_overrides(context_tokens=7000, output_tokens=512))
+        prompt = self.service.system_prompt(self.session, self.settings.with_overrides(skill_roots=()))
+        self.assertNotIn("large receipt", prompt)
+        built = await context.build("Research coordinator", FakeModel())
+        self.assertLess(message_tokens(built), 6000)
+        self.assertIn("large-child", str(built))
+        self.assertIn("interrupted", str(built))
+        self.assertEqual(self.store.get_agent("large-child"), agent)
+        self.assertEqual(self.store.checkpoint("session")["restore"], restore)
+
+    async def test_child_evidence_pagination_keeps_all_results_and_importable_artifacts(self):
+        sid = "evidence-child"
+        self.store.session(sid, parent_id="session")
+        registered = []
+        for i in range(23):
+            path = self.store.file(sid, f"evidence-{i}.txt")
+            path.write_text(f"evidence {i}")
+            registered.append(self.store.artifact(sid, path, "source"))
+        result = "complete evidence "*1600
+        agent = {"id":sid, "parent_id":"session", "task_name":"evidence", "role":"literature",
+                 "status":"completed", "result":result, "artifacts":self.store.artifacts(sid)}
+        self.store.save_agent(agent)
+        listing = await self.tool("wait_agent").ainvoke({"target":sid,"timeout":0})
+        self.assertLess(len(json.dumps(listing)), 6000)
+        self.assertEqual(listing[0]["artifact_count"],23)
+        ids, offset = [], 0
+        while offset is not None:
+            page = await self.tool("read_agent").ainvoke({"target":sid,"artifact_offset":offset,"history_limit":0})
+            ids.extend(a["id"] for a in page["artifacts"])
+            offset = page["next_artifact_offset"]
+        self.assertEqual(set(ids), {a["id"] for a in registered})
+        pieces, offset = [], 0
+        while offset is not None:
+            page = await self.tool("read_agent").ainvoke({"target":sid,"result_offset":offset,"history_limit":0})
+            pieces.append(page["result"])
+            offset = page["next_result_offset"]
+        self.assertEqual("".join(pieces),result)
+        imported = await self.tool("import_agent_artifact").ainvoke({"target":sid,"artifact_id":ids[-1],"destination":"imported.txt"})
+        self.assertTrue(self.store.file("session",imported["path"]).is_file())
+        self.assertEqual(self.store.get_agent(sid),agent)
 
     async def test_code_results_plotting_and_provenance(self):
         await self.tool("write_file").ainvoke({"path":"experiment.py","content":"from pathlib import Path\nPath('results.csv').write_text('method,score,sd\\nbaseline,0.5,0.02\\nmethod,0.7,0.03\\n')\nprint('synthetic smoke test')\n"})
