@@ -34,6 +34,11 @@ Store a UTF-8 JSON array with unique case IDs and splits. For prediction metrics
 
 Before execution call `plan_benchmark(benchmark_id, protocol)`:
 
+For large case lists, save the same protocol object as JSON and call
+`plan_benchmark(benchmark_id, protocol_path="evaluation/protocol.json")` instead.
+Do not supply both forms. The file goes through identical validation and is
+included in the frozen inputs; this only avoids retranscribing large tool arguments.
+
 ```json
 {
   "decision": "selected",

@@ -200,12 +200,24 @@ def _dataset(store, sid, path):
     return result
 
 
-def plan_benchmark(store, sid, benchmark_id: str, protocol: dict):
+def plan_benchmark(store, sid, benchmark_id: str, protocol: dict | None = None, protocol_path: str = ""):
     """Freeze applicability and a local protocol before running any evaluation."""
+    if protocol_path:
+        if protocol is not None:
+            raise ValueError("Provide protocol or protocol_path, not both")
+        source = store.file(sid, protocol_path)
+        protocol_path = str(source.relative_to(store.workspace(sid))).replace("\\", "/")
+        protocol = _json(source)
     if not isinstance(protocol, dict):
         raise ValueError("protocol must be an object")
     manifest, manifest_path = _manifest(store, sid, benchmark_id, protocol.get("manifest_path"))
     plan = dict(protocol)
+    if protocol_path:
+        paths = plan.get("input_paths", [])
+        if not isinstance(paths, list):
+            raise ValueError("input_paths must be a list")
+        plan["input_paths"] = [*paths, protocol_path] if protocol_path not in paths else list(paths)
+        plan["protocol_source_path"] = protocol_path
     plan.update(plan_id=f"bench_{uuid.uuid4().hex}", benchmark_id=benchmark_id, manifest_path=manifest_path,
                 manifest_sha256=_hash(store.file(sid, manifest_path)), created_at=now(), created_ns=time.time_ns())
     for field in ("rationale", "claim", "task_match"):

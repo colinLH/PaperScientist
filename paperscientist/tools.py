@@ -430,10 +430,10 @@ class ToolSet:
             return benchmarks.register_benchmark(store, sid, manifest)
 
         @tool
-        def plan_benchmark(benchmark_id: str, protocol: dict) -> dict:
-            """Freeze benchmark data/script hashes, split, sample IDs, models, seeds, metrics and budget BEFORE evaluation. Load benchmark-evaluation for the protocol schema."""
+        def plan_benchmark(benchmark_id: str, protocol: dict | None = None, protocol_path: str = "") -> dict:
+            """Freeze a protocol BEFORE evaluation. Supply either the protocol object or protocol_path to a saved JSON object (use files for large case lists). Same validation and hashes apply; the source file is also frozen. Load benchmark-evaluation for the schema."""
             from . import benchmarks
-            return benchmarks.plan_benchmark(store, sid, benchmark_id, protocol)
+            return benchmarks.plan_benchmark(store, sid, benchmark_id, protocol, protocol_path)
 
         @tool
         async def run_benchmark(plan_id: str) -> dict:

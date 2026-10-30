@@ -152,6 +152,20 @@ Path("results.json").write_text(json.dumps(rows), encoding="utf-8")
         protect_benchmark_file(self.store, self.sid, "revision/evaluate.py")
         protect_benchmark_file(self.store, self.sid, "results.json")
 
+    async def test_file_protocol_uses_same_checks_and_freezes_source(self):
+        self.write("protocol.json", self.protocol)
+        plan = plan_benchmark(self.store, self.sid, self.manifest["id"], protocol_path="protocol.json")
+        self.assertIn("protocol.json", plan["input_sha256"])
+        self.assertEqual(plan["case_ids"], self.protocol["case_ids"])
+        result = await run_benchmark(self.store, self.sid, plan["plan_id"], True)
+        self.assertTrue(result["summary"]["protocol_complete"])
+        self.write("protocol.json", {**self.protocol, "case_ids": ["missing"]})
+        self.assertFalse(audit_benchmarks(self.store, self.sid)["integrity_valid"])
+        with self.assertRaisesRegex(ValueError, "Selected cases"):
+            plan_benchmark(self.store, self.sid, self.manifest["id"], protocol_path="protocol.json")
+        with self.assertRaisesRegex(ValueError, "not both"):
+            plan_benchmark(self.store, self.sid, self.manifest["id"], self.protocol, "protocol.json")
+
     async def test_auxiliary_input_hash_is_checked_before_running(self):
         self.write("raw-data.json", [1, 2, 3])
         plan = self.plan(input_paths=["raw-data.json"])
