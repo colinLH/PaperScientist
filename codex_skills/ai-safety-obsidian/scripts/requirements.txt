@@ -1,0 +1,5 @@
+ladybug==0.17.0
+graphifyy==0.9.93
+networkx==3.7
+PyYAML==6.0.3
+tzdata==2025.2

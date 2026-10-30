@@ -1,0 +1,4 @@
+interface:
+  display_name: "AI 安全论文日报与 Obsidian 图谱"
+  short_description: "归档 AI 安全论文，保留原文图表与证据，增量更新 Obsidian 图谱并配置定时任务"
+  default_prompt: "使用 $ai-safety-obsidian，为我的 Obsidian 仓库初始化 AI 安全论文日报与知识图谱，并创建每天收集和同步的定时任务。"
