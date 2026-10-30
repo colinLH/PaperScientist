@@ -72,6 +72,8 @@ async function refresh() {
     state=await api('/status'); renderJobs(); renderReports();
     $('#paper-total').textContent=String(state.paper_count); $('#vault').textContent=state.vault;
     $('#open-vault').href=state.obsidian_url; $('#open-vault').hidden=false;
+    $('#configure-vault').disabled=!state.config;
+    $('#configure-vault').textContent=state.config?'连接 / 切换 Obsidian':'等待服务更新后连接';
     if(state.warnings.length) notice(state.warnings.join('\n'),true);
     else if(!state.ready) notice('当前为演示模式。配置 PaperScientist 的模型后即可开始精读。',true);
     updateSubmit();
@@ -87,5 +89,42 @@ $('#reading-form').onsubmit=async e=>{
 document.querySelectorAll('[data-keywords]').forEach(b=>b.onclick=()=>{$('#keywords').value=b.dataset.keywords;$('#keywords').focus();});
 $('#filter').oninput=()=>state&&renderReports(); $('#refresh').onclick=()=>refresh();
 $('#close-report').onclick=()=>$('#report-dialog').close();
+let previewedConfig = '', vaultRequest = 0;
+const vaultConfig=()=>({vault_root:$('#vault-root').value.trim(),prefix:$('#vault-prefix').value.trim(),include_existing_notes:$('#include-notes').checked});
+function invalidateVault() { vaultRequest++; previewedConfig=''; $('#save-vault').disabled=true; $('#vault-preview').replaceChildren(); }
+$('#configure-vault').onclick=async()=>{
+  try {
+    const data=await api('/vaults'), select=$('#detected-vaults');
+    select.replaceChildren(new Option('手动填写路径',''));
+    for(const vault of data.vaults) select.add(new Option(`${vault.name} — ${vault.path}`,vault.path));
+    $('#vault-root').value=data.config.vault_root; $('#vault-prefix').value=data.config.prefix;
+    $('#include-notes').checked=data.config.include_existing_notes;
+    select.value=data.vaults.some(v=>v.path===data.config.vault_root)?data.config.vault_root:'';
+    invalidateVault(); $('#vault-dialog').showModal();
+  }catch(e){notice(e.message,true);}
+};
+$('#detected-vaults').onchange=()=>{if($('#detected-vaults').value)$('#vault-root').value=$('#detected-vaults').value;$('#include-notes').checked=true;invalidateVault();};
+['#vault-root','#vault-prefix','#include-notes'].forEach(id=>$(id).addEventListener('input',invalidateVault));
+$('#close-vault').onclick=()=>$('#vault-dialog').close();
+$('#preview-vault').onclick=async()=>{
+  if(!$('#vault-form').reportValidity()) return;
+  const config=vaultConfig(), key=JSON.stringify(config), request=++vaultRequest;
+  $('#preview-vault').disabled=true; $('#save-vault').disabled=true; $('#vault-preview').textContent='正在读取本地笔记…';
+  try {
+    const result=await api('/archive/preview',config);
+    if(request!==vaultRequest) return;
+    const host=$('#vault-preview'); host.replaceChildren(el('p',`可阅读 ${result.note_count} 篇笔记，${result.paper_count} 篇论文参与去重。`));
+    if(result.samples.length) {const list=el('ul');for(const title of result.samples)list.append(el('li',title));host.append(list);}
+    previewedConfig=key; $('#save-vault').disabled=false;
+  }catch(e){if(request===vaultRequest)$('#vault-preview').textContent=e.message;}
+  finally{$('#preview-vault').disabled=false;}
+};
+$('#vault-form').onsubmit=async e=>{
+  e.preventDefault(); const config=vaultConfig();
+  if(previewedConfig!==JSON.stringify(config)||$('#save-vault').disabled)return;
+  $('#save-vault').disabled=true;
+  try {await api('/archive',config);$('#vault-dialog').close();notice('已连接本地仓库。刷新书架即可读取新增或修改的笔记。');await refresh();}
+  catch(err){$('#vault-preview').textContent=err.message;$('#save-vault').disabled=false;}
+};
 document.addEventListener('visibilitychange',()=>{clearTimeout(timer);if(!document.hidden)refresh();});
 refresh();

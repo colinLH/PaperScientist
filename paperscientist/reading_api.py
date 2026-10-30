@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+from .obsidian_vaults import discover_vaults
+
 
 class ReadingRequest(BaseModel):
     keywords: str = Field(min_length=2, max_length=500)
@@ -14,6 +16,12 @@ class ReadingRequest(BaseModel):
 class ReadingAnswer(BaseModel):
     question_id: str
     answer: str = Field(min_length=1, max_length=10000)
+
+
+class ArchiveConfig(BaseModel):
+    vault_root: str = Field(min_length=1, max_length=4096)
+    prefix: str = Field(default='AI安全', min_length=1, max_length=500)
+    include_existing_notes: bool = True
 
 
 def mount_reading_api(app, service):
@@ -43,6 +51,8 @@ def mount_reading_api(app, service):
         try:
             run = service.runs.require(rid)
             service.job(run['session_id'])
+            if not service.archive_for(run['session_id']).same_location(service.archive):
+                raise ValueError('请先切回此任务原来的仓库')
             return run
         except ValueError as exc:
             raise HTTPException(404, str(exc)) from exc
@@ -52,13 +62,33 @@ def mount_reading_api(app, service):
         warnings = [service.config_error] if service.config_error else []
         try:
             records = service.archive.index()['records']
+            reports = service.archive.reports()
         except (ValueError, OSError) as exc:
             records = []
+            reports = []
             warnings.append(str(exc))
         return {'ready': service.settings.model != 'demo' and not warnings,
-                'model': service.settings.model, 'vault': str(service.archive.root),
+                'model': service.settings.model, 'vault': str(service.archive.root), 'config': service.archive.config(),
                 'obsidian_url': service.archive.uri(), 'paper_count': len(records),
-                'reports': service.archive.reports(), 'jobs': service.jobs(), 'warnings': warnings}
+                'reports': reports, 'jobs': service.jobs(), 'warnings': warnings}
+
+    @router.get('/vaults')
+    def vaults():
+        return {'vaults': discover_vaults(), 'config': service.archive.config()}
+
+    @router.post('/archive/preview')
+    def preview_archive(body: ArchiveConfig):
+        try:
+            return service.preview_archive(body.model_dump())[1]
+        except (ValueError, OSError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @router.post('/archive')
+    async def configure_archive(body: ArchiveConfig):
+        try:
+            return await service.configure_archive(body.model_dump())
+        except (ValueError, OSError) as exc:
+            raise HTTPException(409, str(exc)) from exc
 
     @router.post('/jobs')
     async def start(body: ReadingRequest):
@@ -91,7 +121,8 @@ def mount_reading_api(app, service):
         require(rid)
         try:
             async with service.start_lock:
-                if any(j['run'] and j['run']['id'] != rid and j['run']['status'] in {'queued', 'running', 'recovering', 'waiting_input'} for j in service.jobs()):
+                require(rid)  # Recheck the destination after obtaining the switch/start lock.
+                if service.has_active_job(except_run=rid):
                     raise ValueError('另一个精读任务正在执行')
                 run = await service.runs.continue_run(rid)
                 return {'status': run['status']}

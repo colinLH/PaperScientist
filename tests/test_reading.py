@@ -120,7 +120,7 @@ class ReadingTests(unittest.IsolatedAsyncioTestCase):
     async def test_resume_publication_after_crash_before_index_commit(self):
         _, _, paper = await self.prepare()
         real = self.archive.commit_receipt
-        with patch.object(self.archive, 'commit_receipt', side_effect=OSError('simulated crash')):
+        with patch.object(ReadingArchive, 'commit_receipt', side_effect=OSError('simulated crash')):
             with self.assertRaises(OSError):
                 await self.tools['publish_reading_report'].ainvoke({'papers': [paper]})
         self.assertTrue(self.archive.receipt(self.sid).exists())
@@ -256,6 +256,70 @@ class ReadingTests(unittest.IsolatedAsyncioTestCase):
         for link in re.findall(r'!?\[[^\]]*\]\(([^)]+)\)', report.read_text()):
             if not link.startswith('http'):
                 self.assertTrue((report.parent / unquote(link)).is_file(), link)
+
+
+    async def test_vault_switch_pins_existing_job_and_survives_restart(self):
+        _, _, paper = await self.prepare()
+        other = self.root / 'other vault'
+        other.mkdir()
+        config = {'vault_root': str(other), 'prefix': '.', 'include_existing_notes': True}
+        await self.service.configure_archive(config)
+        self.assertEqual(self.service.archive.root, other.resolve())
+        self.assertEqual(self.service.jobs(), [])
+        # Even tools bound before switching must publish to their original vault.
+        receipt = await self.tools['publish_reading_report'].ainvoke({'papers': [paper]})
+        self.assertEqual(self.archive.verify(self.sid)['paper_count'], 1)
+        self.assertEqual(list(other.iterdir()), [])
+        self.assertTrue(self.service.store.file(self.sid, 'report.md').exists())
+        await self.service.close()
+        restarted = ReadingService(self.settings)
+        self.addAsyncCleanup(restarted.close)
+        self.assertEqual(restarted.archive.root, other.resolve())
+        self.assertEqual(restarted.archive_for(self.sid).root, self.archive.root)
+        self.assertTrue(restarted.archive_gate('', {'session': {'id': self.sid}}, {})['ok'])
+        await restarted.configure_archive(self.archive.config())
+        self.assertEqual(restarted.jobs()[0]['archive']['report_file'], receipt['report_file'])
+
+    async def test_imported_identity_is_not_persisted_and_receipt_stays_idempotent(self):
+        _, _, paper = await self.prepare()
+        self.archive.root.mkdir(parents=True, exist_ok=True)
+        (self.archive.root / 'other.md').write_text('---\npaper_title: Existing unrelated paper\n---\n')
+        archive = ReadingArchive(self.archive.vault, 'AI安全', True)
+        with self.service.store.connect() as db:
+            db.execute('UPDATE reading_destinations SET config=? WHERE sid=?', (json.dumps(archive.config()), self.sid))
+        tools = {t.name: t for t in self.service.additional_tools(self.session, self.settings)}
+        receipt = await tools['publish_reading_report'].ainvoke({'papers': [paper]})
+        self.assertEqual(len(archive.stored_index()['records']), 1)
+        self.assertEqual(len(archive.index()['records']), 2)
+        (archive.root / 'my-notes.md').write_text('---\ntype: paper\ntitle: My personal notes\narxiv_id: 2601.12345\n---\n')
+        repeated = await tools['publish_reading_report'].ainvoke({'papers': [paper]})
+        self.assertEqual(repeated['report_file'], receipt['report_file'])
+        self.assertEqual(len(archive.stored_index()['records']), 1)
+
+    async def test_vault_config_preview_api_is_read_only_and_validates_switch(self):
+        vault = self.root / '我的 Obsidian'
+        vault.mkdir()
+        (vault / 'old.md').write_text('---\ntype: paper\ntitle: My local paper\narxiv_id: 2601.12345v1\n---\n# Existing note')
+        config = {'vault_root': str(vault), 'prefix': '.', 'include_existing_notes': True}
+        app = FastAPI()
+        mount_reading_api(app, self.service)
+        with TestClient(app) as client:
+            response = client.post('/api/reading/archive/preview', json=config)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()['paper_count'], 1)
+            self.assertFalse(self.service.config_path.exists())
+            self.assertEqual(len(list(vault.iterdir())), 1)
+            self.assertEqual(client.post('/api/reading/archive', json=config, headers={'Origin': 'https://evil.example'}).status_code, 403)
+            with patch.object(self.service, 'has_active_job', return_value=True):
+                self.assertEqual(client.post('/api/reading/archive', json=config).status_code, 409)
+            self.assertEqual(self.service.archive.root, self.archive.root)
+            self.assertEqual(client.post('/api/reading/archive', json=config).status_code, 200)
+            self.assertEqual(client.get('/api/reading/status').json()['paper_count'], 1)
+            (vault / 'new.md').write_text('# New local note')
+            self.assertEqual(len(client.get('/api/reading/status').json()['reports']), 2)
+            for bad in ('../outside', '/absolute', '.obsidian'):
+                self.assertEqual(client.post('/api/reading/archive', json={**config, 'prefix': bad}).status_code, 409)
+            self.assertEqual(self.service.archive.root, vault.resolve())
 
 
 if __name__ == '__main__':

@@ -73,14 +73,22 @@ def safe_name(value):
 
 
 class ReadingArchive:
-    def __init__(self, vault, prefix='AI安全'):
+    def __init__(self, vault, prefix='AI安全', include_existing_notes=False):
         self.vault = Path(vault).expanduser().resolve()
         if not prefix or Path(prefix).is_absolute() or '..' in Path(prefix).parts:
             raise ValueError('归档专区必须是仓库中的相对目录')
         self.root = (self.vault / prefix).resolve()
-        if not self.root.is_relative_to(self.vault) or self.root == self.vault:
+        if not self.root.is_relative_to(self.vault) or any(p.startswith('.') and p != '.' for p in Path(prefix).parts):
             raise ValueError('归档专区超出仓库')
+        self.include_existing_notes = include_existing_notes
         self.index_path = self.root / '系统/collection-index.json'
+
+    def config(self):
+        return {'vault_root': str(self.vault), 'prefix': self.root.relative_to(self.vault).as_posix(),
+                'include_existing_notes': self.include_existing_notes}
+
+    def same_location(self, other):
+        return (self.vault, self.root) == (other.vault, other.root)
 
     def path(self, relative):
         path = (self.vault / relative).resolve()
@@ -92,7 +100,7 @@ class ReadingArchive:
         path = self.path(Path(path).relative_to(self.vault))
         return path.relative_to(self.vault).as_posix()
 
-    def index(self):
+    def stored_index(self):
         if not self.index_path.exists():
             # Existing reports without their authoritative index must never imply no duplicates.
             if any((self.root / '01-报告').glob('*.md')):
@@ -102,6 +110,57 @@ class ReadingArchive:
         if not isinstance(data, dict) or not isinstance(data.get('records'), list) or any(
                 not isinstance(r, dict) or not r.get('title') for r in data['records']):
             raise ValueError('累计索引格式错误；已停止归档以保护旧论文')
+        return data
+
+    def notes(self):
+        """Read selected notes in place; never copy or modify the user's corpus."""
+        if not self.include_existing_notes:
+            return sorted((self.root / '01-报告').glob('*.md'), reverse=True)
+        notes = []
+        for directory, dirs, files in os.walk(self.root, followlinks=False):
+            dirs[:] = sorted(d for d in dirs if not d.startswith('.') and d != '系统'
+                             and not (Path(directory) / d).is_symlink())
+            for name in sorted(files):
+                path = Path(directory) / name
+                if not name.startswith('.') and path.suffix.lower() == '.md' and not path.is_symlink():
+                    notes.append(path)
+                    if len(notes) > 2000:
+                        raise ValueError('所选范围超过 2000 篇笔记，请选择更小的子目录')
+        return sorted(notes, reverse=True)
+
+    def imported_records(self):
+        records = []
+        if not self.include_existing_notes:
+            return records
+        for path in self.notes():
+            try:
+                if path.stat().st_size > 2_000_000:
+                    continue
+                meta, _ = split_note(path.read_text(encoding='utf-8'))
+                # Only explicit paper metadata participates; citations in prose do not.
+                title = meta.get('paper_title') or meta.get('title') or path.stem
+                arxiv = str(meta.get('arxiv_id') or '')
+                doi = str(meta.get('doi') or '')
+                if arxiv and not re.fullmatch(r'(?:https?://arxiv.org/(?:abs|pdf)/)?(?:\d{4}\.\d{4,5}|[a-zA-Z.-]+/\d{7})(?:v\d+)?(?:\.pdf)?', arxiv):
+                    arxiv = ''
+                if doi and not re.fullmatch(r'(?:https?://(?:dx\.)?doi.org/|doi:\s*)?10\.\d{4,9}/\S+', doi, re.I):
+                    doi = ''
+                if not (meta.get('paper_title') or meta.get('type') == 'paper' or arxiv or doi):
+                    continue
+                records.append({'title': str(title), 'arxiv_id': arxiv, 'doi': doi,
+                                'status': 'local_note', 'note_file': self.rel(path)})
+            except (OSError, ValueError, yaml.YAMLError):
+                continue
+        return records
+
+    def index(self):
+        data = self.stored_index()
+        existing = set().union(*(identities(r) for r in data['records'])) if data['records'] else set()
+        for record in self.imported_records():
+            keys = identities(record)
+            if not keys & existing:
+                data['records'].append(record)
+                existing |= keys
         return data
 
     @contextmanager
@@ -135,12 +194,14 @@ class ReadingArchive:
 
     def reports(self):
         rows = []
-        for path in sorted((self.root / '01-报告').glob('*.md'), reverse=True):
+        for path in self.notes():
             try:
                 path = self.path(path.relative_to(self.vault))
+                if path.stat().st_size > 2_000_000:
+                    continue
                 meta, _ = split_note(path.read_text(encoding='utf-8'))
                 rows.append({'path': self.rel(path), 'title': str(meta.get('title') or path.stem),
-                             'date': str(meta.get('reading_date') or path.stem[:10]),
+                             'date': str(meta.get('reading_date') or datetime.fromtimestamp(path.stat().st_mtime).date()),
                              'complete': meta.get('complete'), 'obsidian_url': self.uri(path)})
             except (ValueError, OSError, yaml.YAMLError):
                 continue
@@ -149,7 +210,9 @@ class ReadingArchive:
     def public_file(self, relative):
         path = self.path(relative)
         allowed = {'01-报告', '02-论文', '附件'}
-        if path.relative_to(self.root).parts[0] not in allowed or path.suffix.lower() not in {
+        parts = path.relative_to(self.root).parts
+        if (any(p.startswith('.') or p == '系统' for p in parts)
+                or (not self.include_existing_notes and parts[0] not in allowed)) or path.suffix.lower() not in {
                 '.md', '.pdf', '.png', '.jpg', '.jpeg', '.webp'} or not path.is_file():
             raise ValueError('文件不可预览')
         return path
@@ -161,6 +224,40 @@ class ReadingArchive:
         _, body = split_note(path.read_text(encoding='utf-8'))
         # HTML is disabled; file links are resolved inside the configured archive.
         md = MarkdownIt('commonmark', {'html': False}).enable('table')
+        def wikilink(state, silent):
+            match = re.match(r'(!?)\[\[([^\]\n]+)\]\]', state.src[state.pos:])
+            if not match:
+                return False
+            if not silent:
+                target, _, label = match[2].partition('|')
+                target = target.split('#', 1)[0]
+                local = None
+                for base in (path.parent, self.root):
+                    candidate = base / target
+                    if not candidate.suffix:
+                        candidate = candidate.with_suffix('.md')
+                    try:
+                        local = self.public_file(candidate.relative_to(self.vault))
+                        break
+                    except (ValueError, OSError):
+                        continue
+                if local:
+                    href = quote(os.path.relpath(local, path.parent).replace(os.sep, '/'), safe='/')
+                    if match[1] and local.suffix.lower() in {'.png', '.jpg', '.jpeg', '.webp'}:
+                        token = state.push('image', 'img', 0)
+                        token.attrSet('src', href)
+                        token.attrSet('alt', label or target)
+                        token.content = label or target
+                    else:
+                        token = state.push('link_open', 'a', 1)
+                        token.attrSet('href', href)
+                        state.push('text', '', 0).content = label or target
+                        state.push('link_close', 'a', -1)
+                else:
+                    state.push('text', '', 0).content = match[0]
+            state.pos += len(match[0])
+            return True
+        md.inline.ruler.before('link', 'obsidian_wikilink', wikilink)
         tokens = md.parse(body)
         def visit(items):
             for token in items:
@@ -203,13 +300,16 @@ class ReadingArchive:
         for relative, expected in receipt['files'].items():
             if digest(self.path(relative)) != expected:
                 raise ValueError('归档文件已改变：' + relative)
-        index = self.index()
+        index = self.stored_index()
+        imported = self.imported_records()
         for paper in receipt['records']:
             matches = [r for r in index['records'] if identities(paper) & identities(r)]
             if matches:
                 if len(matches) != 1 or any(matches[0].get(k) != paper.get(k) for k in ('source_id', 'pdf_local', 'report_file', 'sha256')):
                     raise ValueError('论文已被其他任务归档：' + paper['title'])
             else:
+                if any(identities(paper) & identities(r) for r in imported):
+                    raise ValueError('论文已有本地笔记：' + paper['title'])
                 index['records'].append(paper)
         index['updated_at'] = stamp()
         atomic_json(self.index_path, index)
@@ -228,7 +328,7 @@ class ReadingArchive:
                     raise ValueError('论文已归档（包括 awaiting_graph）：' + paper['title'])
                 existing |= keys
             if not self.index_path.exists():
-                atomic_json(self.index_path, index)
+                atomic_json(self.index_path, self.stored_index())
             date = stamp()[:10]
             name = f'{date}｜专题精读：{safe_name(keywords)}-{source_id[:8]}.md'
             report = self.path((self.root / '01-报告' / name).relative_to(self.vault))

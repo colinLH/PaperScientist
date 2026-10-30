@@ -24,10 +24,24 @@
       <div class="work-main"><section aria-labelledby="jobs-title"><div class="section-heading"><h2 id="jobs-title">精读任务</h2><button id="refresh" class="text-button">刷新</button></div><div id="jobs" class="jobs"><p class="empty">正在加载任务…</p></div></section>
         <section class="library" aria-labelledby="library-title"><div class="section-heading"><h2 id="library-title">报告书架 <span id="report-count"></span></h2><label class="sr-only" for="filter">搜索历史报告</label><input id="filter" type="search" placeholder="搜索历史报告"></div><div id="reports" class="reports"><p class="empty">正在读取 Obsidian 报告…</p></div></section>
       </div>
-      <aside class="archive-card"><div class="archive-icon" aria-hidden="true">▱</div><p class="eyebrow">YOUR READING LIBRARY</p><h2>知识留在你的仓库。</h2><p><strong id="paper-total">—</strong> 篇已归档论文</p><p id="vault" class="path">正在连接…</p><a id="open-vault" class="secondary" hidden>在 Obsidian 打开 ↗</a><p class="hint">与已有论文共用去重索引。会议版、预印本与版本更新按同一篇论文处理。</p><p class="hint">精读任务拥有独立的历史和进度，可离开页面后回来继续查看。</p></aside>
+      <aside class="archive-card"><div class="archive-icon" aria-hidden="true">▱</div><p class="eyebrow">YOUR READING LIBRARY</p><h2>知识留在你的仓库。</h2><p><strong id="paper-total">—</strong> 篇已登记论文</p><p id="vault" class="path">正在连接…</p><button id="configure-vault" class="secondary" type="button">连接 / 切换 Obsidian</button><a id="open-vault" class="secondary" hidden>在 Obsidian 打开 ↗</a><p class="hint">与已有论文共用去重索引。会议版、预印本与版本更新按同一篇论文处理。</p><p class="hint">精读任务拥有独立的历史和进度，可离开页面后回来继续查看。</p></aside>
     </section>
   </main>
   <footer>PaperScientist <span>阅读、理解、积累。</span><a href="/welcome">返回欢迎页 ↑</a></footer>
   <dialog id="report-dialog" aria-labelledby="report-title"><div class="dialog-heading"><h2 id="report-title">精读报告</h2><div><a id="report-download">下载 Markdown</a><a id="report-obsidian">Obsidian ↗</a><button id="close-report" aria-label="关闭报告">×</button></div></div><article id="report-body" class="markdown"></article></dialog>
+  <dialog id="vault-dialog" aria-labelledby="vault-title">
+    <div class="dialog-heading"><h2 id="vault-title">连接你的 Obsidian</h2><button id="close-vault" type="button" aria-label="关闭仓库设置">×</button></div>
+    <form id="vault-form" class="vault-form">
+      <p class="hint">选择运行 PaperScientist 的电脑上的仓库。笔记保留在原处，连接后即可在书架阅读。</p>
+      <label for="detected-vaults">发现的本地仓库</label><select id="detected-vaults"><option value="">手动填写路径</option></select>
+      <label for="vault-root">仓库绝对路径</label><input id="vault-root" required maxlength="4096" placeholder="选择上方仓库，或粘贴本地文件夹路径">
+      <label for="vault-prefix">读取与归档的子目录</label><input id="vault-prefix" required maxlength="500" value="AI安全">
+      <p class="hint">例如 AI安全、论文；填写 . 可读取整个仓库。新报告会保存在此范围内的 01-报告。</p>
+      <label class="check-label"><input id="include-notes" type="checkbox" checked>同时导入此范围内已有的 Markdown 笔记</label>
+      <p class="hint">论文元数据参与去重；普通笔记仅供阅读。刷新后自动读取本地变化，每次最多 2000 篇、单篇 2 MB。</p>
+      <div id="vault-preview" role="status" aria-live="polite"></div>
+      <div class="vault-actions"><button id="preview-vault" type="button" class="secondary">预览导入</button><button id="save-vault" type="submit" class="primary" disabled>保存并连接</button></div>
+    </form>
+  </dialog>
   <script type="module" src="/reading-assets/reading.js"></script>
 </body></html>

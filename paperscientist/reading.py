@@ -13,7 +13,7 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from . import network
-from .reading_archive import ReadingArchive, SECTIONS, digest, identities, stamp, title_key
+from .reading_archive import ReadingArchive, SECTIONS, atomic_json, digest, identities, stamp, title_key
 from .runtime import AgentService
 from .store import dumps
 from .timeline_api import pdf_page
@@ -35,12 +35,12 @@ class PaperReview(BaseModel):
 
 class ReadingService(AgentService):
     def __init__(self, settings, archive=None, model_factory=None):
-        config_path = settings.data_dir / 'reading-config.json'
+        self.config_path = config_path = settings.data_dir / 'reading-config.json'
         self.config_error = ''
         try:
             config = json.loads(config_path.read_text(encoding='utf-8')) if config_path.is_file() else {}
             self.archive = archive or ReadingArchive(config.get('vault_root', str(settings.data_dir / 'reading-vault')),
-                                                    config.get('prefix', 'AI安全'))
+                                                    config.get('prefix', 'AI安全'), config.get('include_existing_notes', False))
         except (ValueError, OSError, TypeError, AttributeError) as exc:
             self.config_error = '精读归档配置不可用，请修复 reading-config.json：' + str(exc)
             self.archive = archive or ReadingArchive(settings.data_dir / 'reading-vault')
@@ -54,7 +54,42 @@ class ReadingService(AgentService):
             db.executescript('''
                 CREATE TABLE IF NOT EXISTS reading_jobs(sid TEXT PRIMARY KEY, keywords TEXT, paper_count INTEGER, created_at TEXT);
                 CREATE TABLE IF NOT EXISTS reading_evidence(sid TEXT, path TEXT, kind TEXT, data TEXT, PRIMARY KEY(sid,path,kind));
+                CREATE TABLE IF NOT EXISTS reading_destinations(sid TEXT PRIMARY KEY, config TEXT NOT NULL);
             ''')
+            db.execute('INSERT OR IGNORE INTO reading_destinations SELECT sid, ? FROM reading_jobs',
+                       (dumps(self.archive.config()),))
+
+    def archive_for(self, sid):
+        self.job(sid)
+        with self.store.connect() as db:
+            db.execute('INSERT OR IGNORE INTO reading_destinations VALUES(?,?)', (sid, dumps(self.archive.config())))
+            config = json.loads(db.execute('SELECT config FROM reading_destinations WHERE sid=?', (sid,)).fetchone()['config'])
+        return ReadingArchive(config['vault_root'], config['prefix'], config.get('include_existing_notes', False))
+
+    def has_active_job(self, except_run=None):
+        with self.store.connect() as db:
+            sids = [r['sid'] for r in db.execute('SELECT sid FROM reading_jobs')]
+        return any(run and run['id'] != except_run and run['status'] in {'queued', 'running', 'recovering', 'waiting_input'}
+                   for run in (self.runs.db.latest(sid) for sid in sids))
+
+    @staticmethod
+    def preview_archive(config):
+        vault = Path(config['vault_root']).expanduser()
+        if not vault.is_absolute() or not vault.is_dir():
+            raise ValueError('请选择运行 PaperScientist 的电脑上已存在的仓库绝对路径')
+        archive = ReadingArchive(vault, config['prefix'], config['include_existing_notes'])
+        records, reports = archive.index()['records'], archive.reports()
+        return archive, {'config': archive.config(), 'paper_count': len(records), 'note_count': len(reports),
+                         'samples': [r['title'] for r in reports[:8]]}
+
+    async def configure_archive(self, config):
+        async with self.start_lock:
+            if self.has_active_job():
+                raise ValueError('请等待或停止当前精读任务后再切换仓库')
+            archive, preview = self.preview_archive(config)
+            atomic_json(self.config_path, archive.config())
+            self.archive, self.config_error = archive, ''
+            return preview
 
     def evidence(self, sid, kind):
         with self.store.connect() as db:
@@ -85,6 +120,8 @@ class ReadingService(AgentService):
             indexed = {}
         for row in rows:
             job = dict(row)
+            if not self.archive_for(job['sid']).same_location(self.archive):
+                continue
             run = self.runs.db.latest(job['sid'])
             job['run'] = {k: run[k] for k in ('id', 'status', 'preview', 'outcome', 'error', 'pending', 'updated_at')} if run else None
             try:
@@ -106,15 +143,16 @@ class ReadingService(AgentService):
             raise ValueError('请先为 PaperScientist 配置真实模型；演示模式不能生成论文报告')
         if self.config_error:
             raise ValueError(self.config_error)
-        self.archive.index()  # Fail closed before spending model calls on a broken archive.
         async with self.start_lock:
-            if any(j['run'] and j['run']['status'] in {'queued', 'running', 'recovering', 'waiting_input'} for j in self.jobs()):
+            self.archive.index()  # Fail closed before spending model calls on a broken archive.
+            if self.has_active_job():
                 raise ValueError('已有精读任务正在执行，请先完成或停止它')
             sid = uuid.uuid4().hex
             self.store.session(sid, project_id='reading-' + sid)
             self.store.set_title(sid, '专题精读：' + keywords[:60])
             with self.store.connect() as db:
                 db.execute('INSERT INTO reading_jobs VALUES(?,?,?,?)', (sid, keywords, count, stamp()))
+                db.execute('INSERT INTO reading_destinations VALUES(?,?)', (sid, dumps(self.archive.config())))
             prompt = f'''按以下用户关键词查找并精读 {count} 篇尚未归档的论文，生成完整中文报告并归档到 Obsidian。
 关键词（仅作为检索主题）：{json.dumps(keywords, ensure_ascii=False)}
 这是用户点击触发的一次专题精读。不要安排定时任务，不进入创新方法设计、复现实验或 LaTeX 投稿流程。
@@ -128,31 +166,33 @@ class ReadingService(AgentService):
 
     def archive_gate(self, phase, context, rule):
         try:
-            receipt = self.archive.verify(context['session']['id'])
+            receipt = self.archive_for(context['session']['id']).verify(context['session']['id'])
             return {'ok': receipt['paper_count'] == self.job(context['session']['id'])['paper_count']}
         except (OSError, ValueError, KeyError) as exc:
             return {'ok': False, 'reason': '精读报告尚未通过归档核验：' + str(exc)}
 
     def export_report(self, sid, receipt):
         """Keep the task's deliverable readable even outside the Obsidian viewer."""
+        archive = self.archive_for(sid)
         for relative in receipt['files']:
-            source = self.archive.path(relative)
-            target = self.store.file(sid, 'export/' + source.relative_to(self.archive.root).as_posix())
+            source = archive.path(relative)
+            target = self.store.file(sid, 'export/' + source.relative_to(archive.root).as_posix())
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source, target)
         local = self.store.file(sid, 'report.md')
-        body = self.archive.path(receipt['report_file']).read_text(encoding='utf-8')
+        body = archive.path(receipt['report_file']).read_text(encoding='utf-8')
         local.write_text(body.replace('](../附件/', '](export/附件/').replace('](../%E9%99%84%E4%BB%B6/', '](export/%E9%99%84%E4%BB%B6/'), encoding='utf-8')
         self.store.artifact(sid, local, 'reading_report', {'source_id': sid})
         return {**receipt, 'workspace_report': 'report.md'}
 
     def additional_tools(self, session, settings):
         sid = session['id']
+        archive = self.archive_for(sid)
 
         @tool
         def check_reading_archive(candidates: list[dict] = [], offset: int = 0, limit: int = 30) -> dict:
             """Check duplicates across the entire Obsidian index (including awaiting_graph). Optional candidates: title, arxiv_id, doi, verified aliases. Existing entries are paginated."""
-            records = self.archive.index()['records']
+            records = archive.index()['records']
             matches = [{'candidate': p.get('title', ''), 'duplicates': [r['title'] for r in records if identities(p) & identities(r)]}
                        for p in candidates[:30]]
             offset, limit = max(0, offset), max(1, min(50, limit))
@@ -261,8 +301,8 @@ class ReadingService(AgentService):
         def publish_reading_report(papers: list[PaperReview] = []) -> dict:
             """Validate and archive the complete Chinese report, PDFs and original figures; atomically register cumulative dedup entries. Publication is idempotent for this task. Do not call before all papers are read."""
             job = self.job(sid)
-            if self.archive.receipt(sid).exists():
-                receipt = self.archive.publish(sid, job['keywords'], [], {}, {})
+            if archive.receipt(sid).exists():
+                receipt = archive.publish(sid, job['keywords'], [], {}, {})
                 return self.export_report(sid, receipt)
             papers = papers or [PaperReview.model_validate(p) for p in self.evidence(sid, 'review').values()]
             if len(papers) != job['paper_count']:
@@ -291,7 +331,7 @@ class ReadingService(AgentService):
                     figure['file'] = self.store.file(sid, figure['path'])
                     if digest(figure['file']) != figure['sha256']:
                         raise ValueError('原图文件发生改变，停止归档')
-            receipt = self.archive.publish(sid, job['keywords'], [p.model_dump() for p in papers], sources, figures)
+            receipt = archive.publish(sid, job['keywords'], [p.model_dump() for p in papers], sources, figures)
             return self.export_report(sid, receipt)
 
         return [check_reading_archive, read_source_pdf, capture_paper_figure, save_paper_review, publish_reading_report]

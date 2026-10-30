@@ -6,16 +6,27 @@
 
 ## 本地归档配置
 
-在 `PS_DATA_DIR/reading-config.json`（默认 `.paperscientist/reading-config.json`，不提交 Git）配置：
+在精读页面点击 **连接 / 切换 Obsidian**，选择自动发现的仓库，或粘贴本机已有文件夹的绝对路径。发现功能读取当前用户的 Obsidian 注册文件，支持 macOS、Windows、Linux 和 Flatpak；未安装 Obsidian 也可手动选择 Markdown 文件夹。路径来自使用者的电脑，不包含原作者的仓库位置。
+
+选择读取与归档的子目录（如 `AI安全`、`论文`，或用 `.` 选择整个仓库），勾选导入已有 Markdown，点击 **预览导入**，确认数量与标题后 **保存并连接**。立即生效，无需重启；刷新书架会重新读取本地新增或修改的笔记。这里的“本机”指运行 PaperScientist 服务的电脑，远程浏览器不会自动上传它所在电脑的笔记。
+
+导入直接读取原文件，不复制或改写个人笔记。书架支持标准 Markdown、本地图片与相对或仓库根目录的 `[[路径|别名]]` / `![[图片路径]]`，跳过隐藏目录、系统目录、符号链接及超过 2 MB 的笔记；范围超过 2000 篇时请改选子目录。跨出所选子目录的附件不提供预览，可改选共同上级或整个仓库。
+
+普通笔记仅供阅读；frontmatter 中的 `paper_title`、`type: paper` 配合 `title`，或有效的 `arxiv_id` / `doi` 用于识别已有论文。正文引用不算已归档论文。导入身份只用于动态去重，不写入或替代 `系统/collection-index.json`，也不代表精读质量已经核验。原有索引及未知字段保留；旧格式 `01-报告` 存在但索引缺失时，须先恢复索引。
+
+设置保存在当前安装的 `PS_DATA_DIR/reading-config.json`（默认 `.paperscientist/reading-config.json`，不提交 Git）：
 
 ```json
 {
   "vault_root": "/absolute/path/to/your/obsidian/vault",
-  "prefix": "AI安全"
+  "prefix": "AI安全",
+  "include_existing_notes": true
 }
 ```
 
-Windows 可使用 `"E:/notes/paper"`。修改后重启服务。未配置时使用数据目录下的 `reading-vault/AI安全`，可作为 Obsidian 仓库打开。配置损坏时精读功能停止启动新任务并显示原因，不影响论文产出服务。
+Windows 可使用 `"E:/notes/paper"`。页面保存立即生效；仅手动编辑配置文件时需要重启服务。未配置时使用本安装数据目录下的 `reading-vault/AI安全`，首次归档时创建。配置损坏时显示原因，可从页面重新连接，不影响论文产出服务。
+
+活动精读任务执行期间不能切换仓库。每个任务持久保存其原始归档位置；切换后的任务列表只显示对应仓库的历史，切回即可继续旧任务。模型工具、归档门禁和导出都使用任务绑定的位置，重启后仍保持一致。
 
 新报告沿用 `01-报告`、`附件/PDF`、`附件/图表/YYYY-MM-DD`、`附件/资料` 与 `系统/collection-index.json`。保留稳定 `source_id`、`complete: true`、本地引用及图像来源清单；索引新条目为 `awaiting_graph`，供现有图谱任务增量处理。原报告和个人笔记不被覆盖。旧报告若没有 `complete` 字段，页面不将其误标为草稿。
 
@@ -41,7 +52,7 @@ PDF 从公开地址获取并记录 SHA-256。分段输出限制长度，逐页�
 ## 验证
 
 ```bash
-python -m pytest tests/test_reading.py tests/test_agent_profiles.py tests/test_durable_harnesses.py tests/test_durable_runs.py tests/test_intro.py tests/test_research_agent.py -q
+python -m pytest tests/test_reading.py tests/test_obsidian_vaults.py tests/test_agent_profiles.py tests/test_durable_harnesses.py tests/test_durable_runs.py tests/test_intro.py tests/test_research_agent.py -q
 node --test tests/intro_closing.test.mjs tests/intro_journey.test.mjs tests/intro_motion.test.mjs
 ```
 
