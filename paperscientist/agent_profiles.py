@@ -23,6 +23,13 @@ COORDINATION_TOOLS = frozenset({
     'send_message', 'cancel_agent', 'import_agent_artifact', 'list_agent_profiles',
 })
 DEFAULT_PATH = Path(__file__).with_name('agent_profiles.yaml')
+# Frozen-packet reviews may inspect local evidence and write their own report.
+# An allowlist also excludes future/extension tools, not only known network tools.
+ISOLATED_REVIEW_TOOLS = frozenset({
+    'list_files', 'read_file', 'read_tool_result', 'read_history',
+    'write_file', 'edit_file', 'list_skills', 'list_skill_resources', 'load_skill',
+    'review_manuscript', 'validate_manuscript', 'validate_manuscript_layout',
+})
 
 
 class HarnessViolation(ValueError):
@@ -160,6 +167,10 @@ class AgentProfileRegistry:
             if profile.inherited:
                 rules = {json.dumps(h, sort_keys=True): h for h in (*profile.harnesses, *parent_profile.harnesses)}
                 profile = replace(profile, harnesses=tuple(rules.values()))
+        if agent.get('isolated_review'):
+            profile = replace(profile,
+                              tool_ceiling=frozenset(n for n in ISOLATED_REVIEW_TOOLS if profile.allows_tool(n)),
+                              allow_mcp=frozenset(), children=frozenset())
         return profile
 
     def delegate(self, parent_profile, role, tool_names, catalog):

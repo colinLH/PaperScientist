@@ -136,6 +136,53 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([m.status for m in errors], ['error','error'])
         self.assertTrue(all('outside this agent profile' in m.content for m in errors))
 
+    async def test_isolated_review_denies_network_at_binding_dispatch_and_reload(self):
+        from dataclasses import replace
+        from paperscientist.agent_profiles import ISOLATED_REVIEW_TOOLS
+        # Even an operator profile granting wildcard tools/MCP cannot escape isolation.
+        for name in ('orchestrator', 'reviewer'):
+            self.service.profiles.profiles[name] = replace(self.service.profiles.get(name),
+                tools=frozenset({'*'}), allow_mcp=frozenset({'*'}))
+        source = self.service.store.file('root', 'source.txt')
+        source.write_text('Frozen evidence')
+        artifact = self.service.store.artifact('root', source, 'manuscript')
+        model = Model([calls(('search_papers', {'query':'must not reach network'}),
+                             ('fetch_url', {'url':'https://example.org'})),
+                       calls(('write_file', {'path':'review.md','content':'Bounded review'}))])
+        self.service.model_factory = lambda _:model
+        with patch('paperscientist.runtime.load_tools', side_effect=AssertionError('MCP must not load')):
+            child = await self.spawn('reviewer', isolated_review=True, artifact_ids=[artifact['id']])
+            self.assertEqual((await self.wait(child))['status'], 'completed')
+        self.assertLessEqual({t.name for t in model.tools}, ISOLATED_REVIEW_TOOLS)
+        responses = [m for _,m in self.service.store.history(child['id']) if isinstance(m,ToolMessage)]
+        self.assertEqual([m.status for m in responses], ['error','error','success'])
+        self.assertTrue(all('outside this agent profile' in m.content for m in responses[:2]))
+        self.assertEqual(self.service.store.file(child['id'], 'review.md').read_text(), 'Bounded review')
+        # Reconstruct from persisted session/capabilities with a new registry.
+        registry = AgentProfileRegistry()
+        restored = registry.for_session(self.service.store, self.service.store.get_session(child['id']))
+        self.assertFalse(restored.allow_mcp)
+        self.assertFalse(restored.children)
+        self.assertFalse(restored.allows_tool('search_papers'))
+        self.assertFalse(restored.allows_tool('future_extension'))
+        self.assertTrue(restored.allows_tool('read_file'))
+        durable_model = Model([calls(('search_papers', {'query':'still forbidden'})),
+                               AIMessage(content='Local-only review complete.')])
+        self.service.model_factory = lambda _:durable_model
+        # Durable runs are root-only; exercise the same isolation metadata at
+        # their binding/dispatch boundary without creating an unsupported child run.
+        get_agent = self.service.store.get_agent
+        def isolated_metadata(sid):
+            return {'role':'reviewer', 'isolated_review':True} if sid=='durable-review' else get_agent(sid)
+        with patch.object(self.service.store, 'get_agent', side_effect=isolated_metadata), \
+             patch('paperscientist.runs.load_tools', side_effect=AssertionError('MCP must not load')):
+            run = await self.service.runs.start('durable-review', 'Verify durable isolation', continuous=False)
+            await asyncio.wait_for(self.service.runs.tasks[run['id']], 10)
+        self.assertEqual(self.service.runs.db.get(run['id'])['status'], 'completed')
+        self.assertLessEqual({t.name for t in durable_model.tools}, ISOLATED_REVIEW_TOOLS)
+        errors = [m for _,m in self.service.store.history('durable-review') if isinstance(m,ToolMessage) and m.status=='error']
+        self.assertEqual(len(errors), 1)
+
     async def test_scoped_skills_metadata_loading_resources_staging_and_active_context(self):
         root = self.root/'skills'
         for name in ['literature-review','latex-writing','scientific-python']:

@@ -133,7 +133,8 @@ class ToolIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 prompt = str(model.inputs)
                 for secret in ("PEER_CRITIQUE_SECRET","PEER_REPORT_SECRET","PROFILE_SECRET"):
                     self.assertNotIn(secret,prompt)
-                for tool in ("recall_memory","experience_recall","copy_parent_artifact","list_papers","audit_research"):
+                for tool in ("recall_memory","experience_recall","copy_parent_artifact","list_papers","audit_research",
+                             "search_papers", "read_paper", "fetch_url", "web_search", "run_python", "spawn_agent"):
                     self.assertNotIn(tool,model.tools)
                 packet = service.store.file(child["id"],child["review_packet"][0]["path"])
                 self.assertEqual(packet.read_text(),"Frozen original manuscript")
@@ -145,6 +146,10 @@ class ToolIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 tools = {t.name:t for t in ToolSet(service,session,cfg,child=True).tools}
                 with self.assertRaises(PermissionError):
                     await tools["write_file"].ainvoke({"path":child["review_packet"][0]["path"],"content":"changed","overwrite":True})
+                for name, args in [("list_files", {"scope":"project"}),
+                                   ("read_file", {"scope":"project", "path":"secret.txt"})]:
+                    with self.assertRaises(ValueError):
+                        await tools[name].ainvoke(args)
             finally:
                 await service.close()
 
