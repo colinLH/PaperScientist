@@ -80,7 +80,8 @@ class AgentProfile:
 class AgentProfileRegistry:
     """Reads builtin YAML plus an optional trusted operator override file."""
 
-    def __init__(self, override_path=None):
+    def __init__(self, override_path=None, default_profile='orchestrator'):
+        self.default_profile = default_profile
         self.override_path = Path(override_path) if override_path else None
         self.profiles, self.aliases = {}, {}
         self.hooks: dict[str, Callable] = {'implementation_tests': implementation_tests}
@@ -122,7 +123,7 @@ class AgentProfileRegistry:
         self.profiles, self.aliases, self.revision = profiles, aliases, revision
 
     def get(self, name=None):
-        name = self.aliases.get(name, name) if name else 'orchestrator'
+        name = self.aliases.get(name, name) if name else self.default_profile
         if name not in self.profiles:
             raise ValueError('Unknown agent profile; use list_agent_profiles')
         return self.profiles[name]

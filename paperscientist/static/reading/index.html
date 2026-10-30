@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#edf0e8"><title>论文精读 · PaperScientist</title>
+  <link rel="stylesheet" href="/reading-assets/reading.css">
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="/welcome">◇ <span>PaperScientist</span></a><nav aria-label="功能导航"><span class="selected">论文精读</span><a href="/?workspace=1">论文产出 ↗</a></nav></header>
+  <main>
+    <section class="hero">
+      <div><p class="eyebrow">PAPER READING / OBSIDIAN</p><h1>从一个关键词，<br>读透一组论文。</h1><p class="intro">检索原文、梳理方法与实验，把值得保留的知识<br class="desktop">写成带原图的中文报告，收进你的 Obsidian。</p></div>
+      <aside class="process" aria-label="精读流程"><p class="eyebrow">一次输入，完整精读</p><ol><li><span>01</span><div><b>找到相关论文</b><small>关键词检索 · 核实来源 · 累计去重</small></div></li><li><span>02</span><div><b>回到原文细读</b><small>设计细节 · 实验与消融 · 原图截图</small></div></li><li><span>03</span><div><b>留下可追溯的报告</b><small>中文 Markdown · PDF · Obsidian 归档</small></div></li></ol></aside>
+    </section>
+    <section class="composer" aria-labelledby="compose-title">
+      <form id="reading-form"><div class="form-heading"><h2 id="compose-title">这次想读什么？</h2><span>点击后执行</span></div>
+        <label class="sr-only" for="keywords">论文关键词或研究主题</label><textarea id="keywords" name="keywords" rows="2" minlength="2" maxlength="500" required placeholder="例如：LLM agent 的提示注入防御、长程记忆投毒、可解释性与对齐"></textarea>
+        <div class="suggestions" aria-label="关键词示例"><button type="button" data-keywords="LLM agent prompt injection defense">提示注入防御 ↗</button><button type="button" data-keywords="LLM agent memory poisoning">Agent 记忆安全 ↗</button><button type="button" data-keywords="mechanistic interpretability alignment">可解释性与对齐 ↗</button></div>
+        <div class="form-footer"><label for="paper-count">本次精读 <select id="paper-count"><option value="1">1 篇</option><option value="2" selected>2 篇</option><option value="3">3 篇</option><option value="4">4 篇</option></select></label><button id="submit" class="primary" type="submit" disabled>开始检索与精读 <span>→</span></button></div>
+      </form><p class="hint">覆盖摘要、背景、动机与挑战、贡献、设计细节、实验结果和研究联系。原文不足时会保留材料并说明原因。</p>
+    </section>
+    <p id="notice" role="status" aria-live="polite"></p>
+    <section class="workspace-grid">
+      <div class="work-main"><section aria-labelledby="jobs-title"><div class="section-heading"><h2 id="jobs-title">精读任务</h2><button id="refresh" class="text-button">刷新</button></div><div id="jobs" class="jobs"><p class="empty">正在加载任务…</p></div></section>
+        <section class="library" aria-labelledby="library-title"><div class="section-heading"><h2 id="library-title">报告书架 <span id="report-count"></span></h2><label class="sr-only" for="filter">搜索历史报告</label><input id="filter" type="search" placeholder="搜索历史报告"></div><div id="reports" class="reports"><p class="empty">正在读取 Obsidian 报告…</p></div></section>
+      </div>
+      <aside class="archive-card"><div class="archive-icon" aria-hidden="true">▱</div><p class="eyebrow">YOUR READING LIBRARY</p><h2>知识留在你的仓库。</h2><p><strong id="paper-total">—</strong> 篇已归档论文</p><p id="vault" class="path">正在连接…</p><a id="open-vault" class="secondary" hidden>在 Obsidian 打开 ↗</a><p class="hint">与已有论文共用去重索引。会议版、预印本与版本更新按同一篇论文处理。</p><p class="hint">精读任务拥有独立的历史和进度，可离开页面后回来继续查看。</p></aside>
+    </section>
+  </main>
+  <footer>PaperScientist <span>阅读、理解、积累。</span><a href="/welcome">返回欢迎页 ↑</a></footer>
+  <dialog id="report-dialog" aria-labelledby="report-title"><div class="dialog-heading"><h2 id="report-title">精读报告</h2><div><a id="report-download">下载 Markdown</a><a id="report-obsidian">Obsidian ↗</a><button id="close-report" aria-label="关闭报告">×</button></div></div><article id="report-body" class="markdown"></article></dialog>
+  <script type="module" src="/reading-assets/reading.js"></script>
+</body></html>

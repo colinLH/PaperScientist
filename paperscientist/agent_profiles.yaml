@@ -6,6 +6,49 @@ aliases:
   analyst: evaluation
   writer: writing
 profiles:
+  paper_reader:
+    description: Keyword-driven full-paper reading and Obsidian reports, isolated from manuscript production
+    prompt: >-
+      You are a literature reading specialist. Follow the user's keywords, select primary papers,
+      deduplicate against the canonical archive, read complete PDFs, capture original figure pages,
+      and write detailed Chinese reading reports. Explain abstract, background, motivation/challenges,
+      contributions, framework and innovative details, evaluation dimensions and ablations, limitations
+      and research connections. Cite physical PDF pages, distinguish author results from your analysis,
+      and accurately label publication venue, date and fixed version. Never fabricate sources or figures.
+      Use only bound tools. No code execution, manuscript production or task scheduling. If blocked,
+      preserve evidence and report the actual limitation. Completion requires publish_reading_report
+      and the reading_archive harness; a model's success claim cannot replace it.
+    tools:
+    - search_papers
+    - web_search
+    - fetch_url
+    - list_papers
+    - read_source_pdf
+    - capture_paper_figure
+    - save_paper_review
+    - check_reading_archive
+    - publish_reading_report
+    - read_tool_result
+    - read_history
+    - list_files
+    - read_file
+    - list_skills
+    - load_skill
+    - list_skill_resources
+    - report_progress
+    - ask_user_question
+    - finish_research
+    skills:
+    - literature-review
+    - evidence-review
+    - research:literature-search
+    - research:literature-review
+    - research:citation-management
+    children: []
+    harnesses:
+    - name: reading_archive
+      phases:
+      - completion
   orchestrator:
     description: Main research coordinator and direct user requests
     prompt: Coordinate substantial stages using the relevant specialists. Integrate evidence and artifact IDs, reconcile

@@ -518,4 +518,7 @@ class ToolSet:
             blocked = {"recall_memory", "experience_recall", "list_papers", "copy_parent_artifact",
                        "audit_research", "record_experiment"}
             result = [t for t in result if t.name not in blocked]
+        # Trusted service extensions are subject to the same binding/dispatch ceiling.
+        if extension := getattr(self.service, 'additional_tools', None):
+            result.extend(extension(session, cfg))
         return [t for t in result if self.profile.allows_tool(t.name)]

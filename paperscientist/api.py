@@ -64,17 +64,24 @@ def snapshot(service, sid):
 
 
 def create_app(settings=None, service=None, with_ui=True):
-    settings = settings or Settings.load()
+    settings = settings or (service.settings if service else Settings.load())
     service = service or AgentService(settings)
+    from .reading import ReadingService
+    from .reading_api import mount_reading_api
+    reading_service = ReadingService(settings)
 
     @asynccontextmanager
     async def lifespan(app):
         await service.runs.recover()
+        await reading_service.runs.recover()
         yield
+        await reading_service.close()
         await service.close()
 
     app = FastAPI(title="PaperScientist", version="0.2.0", lifespan=lifespan)
     app.state.service = service
+    app.state.reading_service = reading_service
+    mount_reading_api(app, reading_service)
     from .timeline_api import mount_timeline_api
     mount_timeline_api(app, service)
     workspace_actions = WorkspaceActions(service)

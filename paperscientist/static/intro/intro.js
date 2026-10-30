@@ -17,7 +17,7 @@ const chapters=[
   {name:'星际穿梭',label:'穿过已知的边界',title:'向更远的\n问题出发。',description:'让好奇心，带你穿过这片星海。'},
   {name:'未知的星图',label:'在探索中保持方向',title:'让每一步探索，\n都有迹可循。',description:'你的判断、实验与发现，连成一张研究星图。'},
   {name:'研究作品',label:'从探索到表达',title:'让发现，\n成为作品。',description:'文献、方法、实验与表达，在这里相遇。'},
-  {name:'新的地平线',label:'PaperScientist',title:'与科研 Agent\n一起出发。',description:'带上一个问题，开启你的下一项研究。'}
+  {name:'新的地平线',label:'PaperScientist',title:'与科研 Agent\n一起出发。',description:'从问题到论文，或从关键词到精读报告。'}
 ];
 const root=document.querySelector('#journey'),host=document.querySelector('#landscape'),copy=document.querySelector('#copy'),nav=document.querySelector('#chapters'),veil=document.querySelector('#valley-mist');
 const previous=document.querySelector('#previous'),next=document.querySelector('#next'),start=document.querySelector('#start'),credits=document.querySelector('#credits');
@@ -43,7 +43,7 @@ warpControls.querySelectorAll('button').forEach((b,i)=>b.onclick=()=>{warp.speed
 const buttons=chapters.map((c,i)=>{const b=document.createElement('button');b.setAttribute('aria-label',`${i+1} · ${c.name}`);b.title=c.name;b.addEventListener('click',e=>go(chapterStops[i],e.detail===0));nav.append(b);return b;});
 const style=(el,key,value)=>{if(el.style[key]!==value)el.style[key]=value;};
 const data=(el,key,value)=>{if(el.dataset[key]!==value)el.dataset[key]=value;};
-function textAt(index){if(index===shown&&drawn!==-1)return;shown=index;const c=chapters[index];document.querySelector('#chapter').textContent=c.label;document.querySelector('#title').replaceChildren(...c.title.split('\n').flatMap((line,i)=>i?[document.createElement('br'),document.createTextNode(line)]:[document.createTextNode(line)]));document.querySelector('#description').textContent=c.description;document.querySelector('#scene-name').textContent=c.name;document.querySelector('#number').textContent=String(index+1).padStart(2,'0');start.hidden=index!==chapters.length-1;copy.classList.remove('reveal');void copy.offsetWidth;copy.classList.add('reveal');}
+function textAt(index){if(index===shown&&drawn!==-1)return;shown=index;const c=chapters[index];document.querySelector('#chapter').textContent=c.label;document.querySelector('#title').replaceChildren(...c.title.split('\n').flatMap((line,i)=>i?[document.createElement('br'),document.createTextNode(line)]:[document.createTextNode(line)]));document.querySelector('#description').textContent=c.description;document.querySelector('#scene-name').textContent=c.name;document.querySelector('#number').textContent=String(index+1).padStart(2,'0');start.hidden=index!==chapters.length-1;document.querySelector('#reading-start').hidden=start.hidden;copy.classList.remove('reveal');void copy.offsetWidth;copy.classList.add('reveal');}
 function controls(){previous.disabled=journey.target===0;next.disabled=journey.target===LAST_STOP;document.querySelector('#hint').textContent=journey.target===LAST_STOP?'准备好，开始研究':journey.target===5?'滚动，进入作品':journey.target>=6&&journey.target<=8?'滚动，继续看作品':journey.target===9?'滚动，走向新的发现':'滚动，向前探索';buttons.forEach((b,i)=>b.setAttribute('aria-current',String(i===journeyFrame(journey.target).chapter)));}
 function go(index,instant=false){if(leaving)return;journey.go(index,instant||reduced.matches);controls();wake();}
 function paint(now=performance.now(),dt=1/30){
@@ -89,8 +89,8 @@ window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setT
 function fallback(){hands?.dispose();hands=null;scene?.dispose();scene=null;document.querySelector('#fallback').hidden=false;wake();}
 host.addEventListener('scene-lost',fallback);
 host.addEventListener('scene-ready',wake);
-async function enter(e){if(e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;e.preventDefault();if(leaving)return;leaving=true;audio.fadeOut();root.animate([{opacity:1},{opacity:0}],{duration:reduced.matches?180:800,easing:'ease-out',fill:'forwards'});setTimeout(()=>{dispose();location.assign(e.currentTarget?.href||'/?workspace=1');},reduced.matches?200:1000);}
-document.querySelectorAll('a[href="/?workspace=1"]').forEach(a=>a.addEventListener('click',enter));
+async function enter(e){if(e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;e.preventDefault();if(leaving)return;const destination=e.currentTarget.href;leaving=true;audio.fadeOut();root.animate([{opacity:1},{opacity:0}],{duration:reduced.matches?180:800,easing:'ease-out',fill:'forwards'});setTimeout(()=>{dispose();location.assign(destination);},reduced.matches?200:1000);}
+document.querySelectorAll('a[href="/?workspace=1"],a[href="/reading"]').forEach(a=>a.addEventListener('click',enter));
 function dispose(){if(dead)return;dead=true;profiler?.dispose();cancel();clearTimeout(resizeTimer);hands?.dispose();hands=null;preludeInput.dispose();referenceInput.dispose();prelude.dispose();closing.dispose();warp.dispose();work.dispose();scene?.dispose();scene=null;audio.dispose();root.dataset.renderState='disposed';}
 window.addEventListener('pagehide',dispose);window.addEventListener('pageshow',e=>{if(e.persisted)location.reload();});
 import('./earth-globe.mjs?v=4').then(({createEarth})=>{if(!dead){try{prelude.attachGlobe(createEarth(document.querySelector('#earth-scene')));wake();}catch(error){console.warn('Earth: using projected city fallback',error.message);}}}).catch(error=>console.warn('Earth unavailable',error.message));
