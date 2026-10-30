@@ -1,0 +1,4 @@
+interface:
+  display_name: "指定领域论文日报与 Obsidian 图谱"
+  short_description: "按用户领域和筛选条件归档论文、原图与证据，增量更新 Obsidian 图谱并配置定时任务"
+  default_prompt: "使用 $research-obsidian，按我指定的研究领域初始化 Obsidian 论文日报与知识图谱，并创建收集和同步的定时任务。"

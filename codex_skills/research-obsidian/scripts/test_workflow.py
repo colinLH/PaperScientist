@@ -10,7 +10,8 @@ import unittest
 
 import graph_sync as graph
 from obsidian_sync import Vault, front, split_note
-from runtime_support import file_lock, load_config, validate_config
+from runtime_support import (file_lock, load_config, validate_config, storage_names,
+                             canonical_arxiv, canonical_doi, canonical_pmid)
 
 HERE = Path(__file__).resolve().parent
 
@@ -22,12 +23,12 @@ class WorkflowTests(unittest.TestCase):
         self.base = Path(self.temp.name).resolve()
         self.config = self.base / "runtime/config.json"
         self.work = self.base / "runtime"
-        self.root = self.base / "vault/AI安全"
-        self.cli("init", "--vault", str(self.base / "vault"), "--workspace", str(self.work), "--timezone", "Asia/Singapore")
+        self.root = self.base / "vault/凝聚态物理"
+        self.cli("init", "--vault", str(self.base / "vault"), "--workspace", str(self.work), "--timezone", "Asia/Singapore", "--domain", "凝聚态物理")
         self.c = load_config(self.config)
 
-    def cli(self, *args, ok=True):
-        result = subprocess.run([sys.executable, str(HERE / "workflow.py"), "--config", str(self.config), *args],
+    def cli(self, *args, ok=True, config=None):
+        result = subprocess.run([sys.executable, str(HERE / "workflow.py"), "--config", str(config or self.config), *args],
                                 capture_output=True, text=True, encoding="utf-8")
         if ok:
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -47,7 +48,7 @@ class WorkflowTests(unittest.TestCase):
         pdf.write_bytes(b"%PDF-1.7\n% synthetic header fixture, not a research paper\n")
         record = {"title": "Synthetic Software Test Paper", "arxiv_id": "2501.12345v2", "read_version": "synthetic-v2",
                   "source_url": "https://example.org/synthetic-paper", "collected_on": "2026-10-30",
-                  "pdf_local": "AI安全/附件/PDF/synthetic.pdf", "report_file": str(report.relative_to(self.base / "vault"))}
+                  "pdf_local": self.c["prefix"] + "/附件/PDF/synthetic.pdf", "report_file": str(report.relative_to(Path(self.c["vault_root"])))}
         candidates = self.base / "candidates.json"
         graph.write(candidates, [record])
         return report, record, candidates
@@ -60,10 +61,10 @@ class WorkflowTests(unittest.TestCase):
         row = graph.read(plan_path)["needs_extraction"][0]
         extraction = {"source_id": row["source_id"], "content_hash": row["content_hash"], "complete": True,
                       "nodes": [
-                          {"id": "p", "label": "合成测试论文", "kind": "paper", "category": "attack", "full_title": record["title"], "identity": {"arxiv": "2501.12345"}},
-                          {"id": "d1", "label": "合成领域一", "kind": "domain", "category": "attack"},
-                          {"id": "d2", "label": "合成领域二", "kind": "domain", "category": "attack"},
-                          {"id": "s", "label": "临时合成报告", "kind": "source", "category": "attack"}],
+                          {"id": "p", "label": "合成测试论文", "kind": "paper", "category": "superconductivity", "full_title": record["title"], "identity": {"arxiv": "2501.12345"}},
+                          {"id": "d1", "label": "合成领域一", "kind": "domain", "category": "superconductivity"},
+                          {"id": "d2", "label": "合成领域二", "kind": "domain", "category": "superconductivity"},
+                          {"id": "s", "label": "临时合成报告", "kind": "source", "category": "superconductivity"}],
                       "edges": []}
         for source, target in [("p", "d1"), ("p", "d2"), ("s", "p")]:
             extraction["edges"].append({"source": source, "target": target, "relation": "references", "label": "合成测试关系",
@@ -81,7 +82,7 @@ class WorkflowTests(unittest.TestCase):
         return prepared
 
     def test_fresh_initialization_is_repeatable_and_does_not_create_schedules(self):
-        self.cli("init", "--vault", str(self.base / "vault"), "--workspace", str(self.work), "--timezone", "Asia/Singapore")
+        self.cli("init", "--vault", str(self.base / "vault"), "--workspace", str(self.work), "--timezone", "Asia/Singapore", "--domain", "凝聚态物理")
         self.assertTrue(json.loads(self.cli("doctor").stdout)["ok"])
         self.assertFalse((self.work / "automations.json").exists())
         prompts = json.loads(self.cli("prompts").stdout)
@@ -118,15 +119,157 @@ class WorkflowTests(unittest.TestCase):
         self.assertTrue(db_validation["reopened"])
         self.assertEqual(db_validation["provenance_assertions"], 3)
         index = graph.read(self.root / "系统/collection-index.json")["records"][0]
-        self.assertEqual(index["pdf_local"], "AI安全/附件/PDF/synthetic.pdf")
+        self.assertEqual(index["pdf_local"], "凝聚态物理/附件/PDF/synthetic.pdf")
         generation = graph.read(self.work / "work/sync/current.json")
         self.cli("graph", "apply", "--batch", str(batch))
         self.assertEqual(generation, graph.read(self.work / "work/sync/current.json"))
-        (self.work / "outputs/ai-safety-graph.zip").unlink()
+        (self.work / "outputs/research-graph.zip").unlink()
         self.assertFalse(graph.export_current(graph.paths(self.work)))
         self.cli("graph", "export")
         self.assertTrue(graph.export_current(graph.paths(self.work)))
         self.assertFalse((self.work / "work/sync/pending-publication.json").exists())
+        atlas = graph.read(self.root / "系统/图数据库/atlas.json")
+        self.assertEqual(atlas["metadata"]["domain"], "凝聚态物理")
+        self.assertNotIn("attack", atlas["categories"])
+        self.assertNotIn("redteam", atlas["categories"])
+        self.assertTrue((self.root / "系统/图数据库/research.lbug").is_file())
+        for path in list(self.root.rglob("*.md")) + list((self.work / "work/site/dist").glob("*.html")):
+            self.assertNotIn("AI 安全", path.read_text(encoding="utf-8"))
+
+    def test_domain_is_required_and_instance_bindings_prevent_cross_domain_reuse(self):
+        self.cli("init", "--vault", str(self.base / "vault"), "--workspace", str(self.work), ok=False)
+        with self.assertRaises(ValueError):
+            validate_config({**self.c, "domain": {"name": ""}})
+        with self.assertRaises(ValueError):
+            validate_config({**self.c, "domain": {"name": "肿瘤免疫"}})
+        other_config = self.base / "immunology/config.json"
+        self.cli("init", "--vault", str(self.base / "vault"), "--workspace", str(self.work),
+                 "--domain", "肿瘤免疫", config=other_config, ok=False)
+        self.assertFalse(other_config.exists())
+        self.cli("init", "--vault", str(self.base / "vault"), "--workspace", str(other_config.parent),
+                 "--domain", "肿瘤免疫", "--prefix", "凝聚态物理", config=other_config, ok=False)
+        self.cli("init", "--vault", str(self.base / "vault"), "--workspace", str(other_config.parent),
+                 "--domain", "肿瘤免疫", "--keyword", "T cells", "--exclude-keyword", "case reports",
+                 "--source", "PubMed", config=other_config)
+        second = load_config(other_config)
+        self.assertEqual(second["domain"]["keywords"], ["T cells"])
+        self.assertEqual(second["prefix"], "肿瘤免疫")
+        prompts = json.loads(self.cli("prompts", config=other_config).stdout)
+        self.assertIn("肿瘤免疫", prompts["prompts"]["daily"])
+        self.assertIn("$research-obsidian", prompts["prompts"]["daily"])
+        self.assertNotIn(str(self.config), prompts["prompts"]["daily"])
+        first = json.loads(self.cli("obsidian", "new-report", "--date", "2026-10-30", "--title", "第一领域").stdout)
+        other = json.loads(self.cli("obsidian", "new-report", "--date", "2026-10-30", "--title", "第二领域", config=other_config).stdout)
+        self.assertNotEqual(first["source_id"], other["source_id"])
+        self.assertIn("凝聚态物理论文日报", first["path"])
+        self.assertIn("肿瘤免疫论文日报", other["path"])
+
+    def test_custom_taxonomy_refresh_preserves_sources_and_changes_canvas(self):
+        _, plan, _, _ = self.apply()
+        self.cli("obsidian", "finalize", "--plan", str(plan))
+        before = graph.load(graph.paths(self.work))
+        self.c["domain"]["categories"] = {
+            "superconductivity": {"name": "超导机制", "color": "#123456"},
+            "general": {"name": "跨主题", "color": "#abcdef"}}
+        graph.write(self.config, self.c)
+        new_plan = self.base / "taxonomy-plan.json"
+        result = json.loads(self.cli("obsidian", "plan", "--output", str(new_plan)).stdout)
+        self.assertTrue(result["needs_rebuild"])
+        self.assertEqual(result["needs_extraction"], [])
+        self.cli("graph", "refresh")
+        self.cli("obsidian", "plan", "--output", str(new_plan))
+        self.cli("obsidian", "finalize", "--plan", str(new_plan))
+        self.cli("obsidian", "validate")
+        after = graph.load(graph.paths(self.work))
+        self.assertEqual(before["sources"], after["sources"])
+        atlas = graph.read(self.root / "系统/图数据库/atlas.json")
+        self.assertEqual(atlas["categories"]["superconductivity"]["name"], "超导机制")
+        canvas = graph.read(self.root / "05-图谱/完整知识图谱.canvas")
+        self.assertTrue(any(node.get("color") == "#123456" for node in canvas["nodes"]))
+
+    def test_journal_doi_pmid_and_title_only_papers_need_no_arxiv(self):
+        _, record, candidates = self.report()
+        record.pop("arxiv_id")
+        record.update(doi="https://doi.org/10.9999/SYNTHETIC", pmid="PMID: 12345678")
+        graph.write(candidates, [record])
+        self.cli("obsidian", "register", "--file", str(candidates))
+        stored = graph.read(self.root / "系统/collection-index.json")["records"][0]
+        self.assertEqual(stored["doi"], "10.9999/synthetic")
+        self.assertEqual(stored["pmid"], "12345678")
+        self.assertFalse(stored["arxiv_id"])
+        graph.write(candidates, [{**record, "title": "Different title for same PMID", "doi": "10.9999/another"}])
+        self.cli("obsidian", "register", "--file", str(candidates), ok=False)
+        state = graph.blank()
+        original = graph.identity(state, {"id": "p", "kind": "paper", "label": "期刊论文", "full_title": record["title"],
+                                          "identity": {"doi": record["doi"], "pmid": record["pmid"]}})
+        self.assertEqual(original, graph.identity(state, {"id": "q", "kind": "paper", "label": "同篇", "identity": {"pmid": "12345678"}}))
+        title_only = graph.identity(state, {"id": "book", "kind": "paper", "label": "理论研究", "full_title": "A synthetic theory study"})
+        self.assertNotEqual(original, title_only)
+        self.assertEqual(canonical_arxiv("https://arxiv.org/pdf/hep-th/9901001v2.pdf"), "hep-th/9901001")
+        for kind in ("dataset", "theory", "finding"):
+            self.assertTrue(graph.identity(state, {"id": kind, "kind": kind, "label": "合成" + kind}))
+
+    def test_legacy_config_and_generated_regions_preserve_hashes_and_history(self):
+        legacy_work = self.base / "legacy-runtime"
+        legacy_root = self.base / "vault/AI安全"
+        legacy_config = {k: v for k, v in self.c.items() if k != "domain"}
+        legacy_config.update(schema=1, workspace=str(legacy_work), prefix="AI安全")
+        legacy_path = legacy_work / "config.json"
+        graph.write(legacy_path, legacy_config)
+        (legacy_root / "01-报告").mkdir(parents=True)
+        graph.write(legacy_root / "系统/collection-index.json", {"schema": "ai-safety-obsidian/1", "records": []})
+        loaded = load_config(legacy_path)
+        self.assertEqual(loaded["domain"]["name"], "AI 安全")
+        self.assertEqual(storage_names(loaded)["database"], "ai-safety.lbug")
+        vault = Vault(loaded)
+        note = legacy_root / "01-报告/old.md"
+        note.write_text(front({"source_id": "a" * 32, "title": "旧报告", "complete": True}) + "旧证据内容。" * 30, encoding="utf-8")
+        before = vault.report_descriptors()[0]["a" * 32]["doc"]["hash"]
+        vault.managed(note, "旧生成区")
+        self.assertIn("<!-- AI-SAFETY:GENERATED:START -->", note.read_text(encoding="utf-8"))
+        self.assertEqual(vault.report_descriptors()[0]["a" * 32]["doc"]["hash"], before)
+        note.write_text(note.read_text(encoding="utf-8") + "个人研究笔记\n", encoding="utf-8")
+        vault.managed(note, "新版生成区")
+        self.assertIn("个人研究笔记", note.read_text(encoding="utf-8"))
+        with self.assertRaises(ValueError):
+            validate_config({**legacy_config, "domain": {"name": "另一个领域"}})
+
+    def test_biomedical_full_pipeline_without_arxiv(self):
+        self.config = self.base / "biomed-runtime/config.json"
+        self.work = self.config.parent
+        self.cli("init", "--vault", str(self.base / "vault"), "--workspace", str(self.work), "--domain", "肿瘤免疫")
+        self.c = load_config(self.config)
+        self.root = self.base / "vault/肿瘤免疫"
+        _, record, candidates = self.report()
+        record.pop("arxiv_id")
+        record.update(doi="10.9999/clinical-fixture", pmid="12345678")
+        graph.write(candidates, [record])
+        self.cli("obsidian", "register", "--file", str(candidates))
+        plan = self.base / "clinical-plan.json"
+        self.cli("obsidian", "plan", "--output", str(plan))
+        row = graph.read(plan)["needs_extraction"][0]
+        extraction = {"source_id": row["source_id"], "content_hash": row["content_hash"], "complete": True,
+                      "nodes": [
+                          {"id": "paper", "kind": "paper", "label": "临时医学测试论文", "category": "clinical",
+                           "full_title": record["title"], "identity": {"doi": record["doi"], "pmid": record["pmid"]}},
+                          {"id": "dataset", "kind": "dataset", "label": "临时合成样本", "category": "clinical"}],
+                      "edges": [{"source": "paper", "target": "dataset", "relation": "evaluated_on", "label": "合成软件测试",
+                                 "confidence": "EXTRACTED", "confidence_score": 1, "basis": "仅为软件夹具",
+                                 "evidence": "合成测试边", "evidence_url": "https://example.org/synthetic-paper", "source_location": "合成材料"}]}
+        file = self.base / "clinical-extraction.json"
+        graph.write(file, extraction)
+        batch = self.base / "clinical-batch.json"
+        graph.write(batch, [{"fetch_file": row["fetch_file"], "extraction_file": str(file)}])
+        self.cli("graph", "apply", "--batch", str(batch))
+        self.cli("obsidian", "finalize", "--plan", str(plan))
+        self.cli("graph", "export")
+        self.cli("obsidian", "validate")
+        atlas = graph.read(self.root / "系统/图数据库/atlas.json")
+        self.assertEqual(atlas["metadata"]["domain"], "肿瘤免疫")
+        self.assertEqual(len(atlas["edges"][0]["provenance"]), 1)
+        archived = graph.read(self.root / "系统/collection-index.json")["records"][0]
+        self.assertEqual(archived["pmid"], "12345678")
+        self.assertFalse(archived["arxiv_id"])
 
     def test_finalize_failure_does_not_ack_and_can_resume(self):
         _, plan, _, _ = self.apply()

@@ -5,11 +5,13 @@ from pathlib import Path
 from urllib.parse import quote, unquote, urlparse
 import yaml
 import graph_sync as graph
-from runtime_support import file_lock, load_config, validate_config
-START = '<!-- AI-SAFETY:GENERATED:START -->'
-END = '<!-- AI-SAFETY:GENERATED:END -->'
-REGION = re.compile(re.escape(START) + '\\n?([\\s\\S]*?)\\n?' + re.escape(END))
-KIND_DIR = {'paper': '02-论文', 'domain': '03-领域', 'concept': '04-知识/概念', 'method': '04-知识/方法', 'benchmark': '04-知识/基准'}
+from runtime_support import (file_lock, load_config, validate_config, storage_names, domain_tag, domain_view,
+                             canonical_arxiv, canonical_doi, canonical_pmid)
+START = '<!-- RESEARCH:GENERATED:START -->'
+END = '<!-- RESEARCH:GENERATED:END -->'
+# Match both generations without changing the captured content or content hashes.
+REGION = re.compile(r'<!-- (?:RESEARCH|AI-SAFETY):GENERATED:START -->\n?([\s\S]*?)\n?<!-- (?:RESEARCH|AI-SAFETY):GENERATED:END -->')
+KIND_DIR = {'paper': '02-论文', 'domain': '03-领域', 'concept': '04-知识/概念', 'method': '04-知识/方法', 'benchmark': '04-知识/基准', 'dataset': '04-知识/数据集', 'theory': '04-知识/理论', 'finding': '04-知识/发现'}
 
 def read(p):
     return json.loads(Path(p).read_text(encoding='utf-8'))
@@ -57,7 +59,7 @@ class Vault:
         self.system.mkdir(parents=True, exist_ok=True)
         self.ledger_path = self.system / 'sync-ledger.json'
         self.ledger = read(self.ledger_path) if self.ledger_path.exists() else {'schema': 1, 'sources': {}, 'generated': {}, 'paths': {}, 'conflicts': []}
-        self.paths = graph.paths(self.work)
+        self.paths = graph.paths(self.work, config=self.c)
         self.state = graph.load(self.paths)
 
     def save(self):
@@ -74,6 +76,8 @@ class Vault:
         for p in sorted((self.root / '01-报告').glob('*.md')):
             try:
                 (meta, body) = split_note(p.read_text(encoding='utf-8'))
+                if meta.get('research_domain', self.c['domain']['name']) != self.c['domain']['name']:
+                    raise ValueError('Report belongs to another research domain')
                 sid = str(meta.get('source_id', '')).replace('-', '')
                 if not re.fullmatch('[a-f0-9]{32}', sid):
                     raise ValueError('Missing stable source_id UUID')
@@ -123,6 +127,7 @@ class Vault:
             any(not (self.vault / rel).exists() for rel in
                 list(self.ledger['generated']) + list(self.ledger.get('generated_json', {}))))
         result['needs_export'] = not graph.export_current(self.paths)
+        result['needs_rebuild'] = pointer.exists() and self.state.get('research_domain') != domain_view(self.c)
         write(output, result)
         return result
 
@@ -174,7 +179,8 @@ class Vault:
         path.parent.mkdir(parents=True, exist_ok=True)
         rel = self.rel(path)
         body = body.strip()
-        block = START + '\n' + body + '\n' + END
+        marker = storage_names(self.c)['marker']
+        block = '<!-- ' + marker + ':GENERATED:START -->\n' + body + '\n<!-- ' + marker + ':GENERATED:END -->'
         if path.exists():
             text = path.read_text(encoding='utf-8')
             found = REGION.search(text)
@@ -203,6 +209,7 @@ class Vault:
         current = read(self.paths['sync'] / 'current.json')
         gen = self.paths['sync'] / 'generations' / current['generation']
         atlas = read(gen / 'atlas.json')
+        self.categories = atlas['categories']
         nodes = {n['id']: n for n in atlas['nodes']}
         (docs, errors) = self.report_descriptors()
         if errors:
@@ -245,17 +252,16 @@ class Vault:
                     lines += ['', '阅读来源：' + wiki(report_paths[r['page_id']], r['title']) + ' · 原来源内容版本 `' + r['content_hash'] + '`']
             if n['kind'] == 'paper':
                 record = copy.deepcopy(old_records.get(graph.norm(n.get('full_title', '')), {}))
-                record.update(title=n.get('full_title', n['label']), normalized_title=graph.norm(n.get('full_title', n['label'])), arxiv_id=n.get('identity', {}).get('arxiv'), doi=n.get('identity', {}).get('doi'), aliases=n.get('aliases', []), graph_id=nid, obsidian_file=paths[nid], status='archived_in_obsidian', reading_dates=n.get('reading_dates', []))
+                record.update(title=n.get('full_title', n['label']), normalized_title=graph.norm(n.get('full_title', n['label'])), arxiv_id=n.get('identity', {}).get('arxiv'), doi=n.get('identity', {}).get('doi'), pmid=n.get('identity', {}).get('pmid'), aliases=n.get('aliases', []), graph_id=nid, obsidian_file=paths[nid], status='archived_in_obsidian', reading_dates=n.get('reading_dates', []))
                 if record.get('pdf_local'):
                     lines += ['', '本地 PDF：' + wiki(record['pdf_local'], '打开固定阅读版本')]
                 report = next((r for r in n.get('source_refs', []) if r['page_id'] in docs), None)
                 if report:
                     sid = report['page_id']
-                    headers = re.findall('^## (论文[一二三四五].*)$', docs[sid]['body'], re.M)
+                    headers = re.findall(r'^##\s+(.+)$', docs[sid]['body'], re.M)
                     title = n.get('full_title', '')
                     candidate = next((h for h in headers if title.lower() in h.lower() or n['label'].replace('（论文）', '').lower() in h.lower()), None)
-                    if not candidate and len(headers) == 2:
-                        paper_ids = [k for (k, v) in nodes.items() if v['kind'] == 'paper' and any((q['page_id'] == sid for q in v.get('source_refs', [])))]
+                    if not candidate:
                         candidate = next((h for h in headers if any((a.lower() in h.lower() for a in n.get('aliases', []) if len(a) > 3))), None)
                     target = report_paths[sid].removesuffix('.md') + ('#' + candidate if candidate else '')
                     lines += ['', '## 完整精读报告', '', wiki(target, embed=True)]
@@ -264,7 +270,7 @@ class Vault:
                 lines += ['', '## 单篇关系画布', '', wiki(self.c['prefix'] + '/05-图谱/单篇/' + clean(n['label']) + '.canvas', '展开这篇论文的关系')]
                 records.append(record)
             lines += ['', '## 出向关系与出处', ''] + (links or ['暂无出向关系；可用 Obsidian 反向链接查看关联笔记。'])
-            meta = {'type': n['kind'], 'graph_id': nid, 'title': n.get('full_title', n['label']), 'aliases': n.get('aliases', []), 'category': n.get('category', 'general'), 'tags': ['ai-safety', n['kind'], n.get('category', 'general')]}
+            meta = {'type': n['kind'], 'graph_id': nid, 'title': n.get('full_title', n['label']), 'aliases': n.get('aliases', []), 'category': n.get('category', 'general'), 'research_domain': self.c['domain']['name'], 'tags': ['research', domain_tag(self.c), n['kind'], n.get('category', 'general')]}
             self.managed(self.vault / paths[nid], '\n'.join(lines), meta)
         for e in atlas['edges']:
             lines = ['# ' + nodes[e['source']]['label'] + ' → ' + nodes[e['target']]['label'], '', wiki(paths[e['source']]) + ' → ' + wiki(paths[e['target']]), '', '- 关系：' + e['label'], '- 类型：`' + e['relation'] + '`', '- 层级：' + e['confidence'] + ' / ' + e['basis'], '- 稳定关系 ID：`' + e['id'] + '`', '', e['evidence']]
@@ -274,21 +280,21 @@ class Vault:
             self.managed(self.root / '06-关系证据' / (e['id'] + '.md'), '\n'.join(lines), {'type': 'evidence', 'relation_id': e['id'], 'confidence': e['confidence']})
         titles = {graph.norm(r['title']) for r in records}
         pending = [r for r in collection['records'] if graph.norm(r['title']) not in titles]
-        write(self.system / 'collection-index.json', {'schema': 'ai-safety-obsidian/1', 'updated_at': graph.now(), 'dedup_rule': 'Verified canonical arXiv ID, DOI, full title; aliases require identity verification. Version updates are the same paper.', 'records': records + pending})
+        write(self.system / 'collection-index.json', {'schema': 'ai-safety-obsidian/1' if self.c['schema'] == 1 else 'research-obsidian/2', 'updated_at': graph.now(), 'dedup_rule': 'Verified canonical arXiv ID, DOI, PMID, full title; aliases require identity verification. Version updates are the same paper.', 'records': records + pending})
         self.canvas(atlas, paths, False)
         self.canvas(atlas, paths, True)
-        home = ['# AI 安全知识库', '', '主存储：Obsidian 本地 Markdown；图谱为可追溯的派生视图。', '', '## 开始浏览', '', wiki(self.c['prefix'] + '/05-图谱/论文总览 · 展开版.canvas', '论文总览 · 展开版') + ' · ' + wiki(self.c['prefix'] + '/05-图谱/跨论文关系.canvas', '跨论文关系') + ' · ' + wiki(self.c['prefix'] + '/05-图谱/完整知识图谱.canvas', '完整连接图'), '', '总览只放论文与领域；跨论文比较单独按行展开。每篇论文还有独立的关系画布，适合查看方法、概念和出处。绿色是事实，紫色是归纳。完整连接图隐藏密集边标签，关系名称和证据见单篇详图与证据卡。', '', '## 论文目录', '']
+        home = ['# ' + self.c['domain']['name'] + '知识库', '', '主存储：Obsidian 本地 Markdown；图谱为可追溯的派生视图。', '', '## 开始浏览', '', wiki(self.c['prefix'] + '/05-图谱/论文总览 · 展开版.canvas', '论文总览 · 展开版') + ' · ' + wiki(self.c['prefix'] + '/05-图谱/跨论文关系.canvas', '跨论文关系') + ' · ' + wiki(self.c['prefix'] + '/05-图谱/完整知识图谱.canvas', '完整连接图'), '', '总览只放论文与领域；跨论文比较单独按行展开。每篇论文还有独立的关系画布，适合查看方法、概念和出处。绿色是事实，紫色是归纳。完整连接图隐藏密集边标签，关系名称和证据见单篇详图与证据卡。', '', '## 论文目录', '']
         for r in sorted(records, key=lambda r: (r.get('reading_dates') or [''])[0], reverse=True):
-            home.append('- ' + wiki(r['obsidian_file'], nodes[r['graph_id']]['label']) + ' · ' + wiki(self.c['prefix'] + '/05-图谱/单篇/' + clean(nodes[r['graph_id']]['label']) + '.canvas', '关系详图') + ' · ' + (r.get('arxiv_id') or r.get('doi') or '完整题名去重'))
+            home.append('- ' + wiki(r['obsidian_file'], nodes[r['graph_id']]['label']) + ' · ' + wiki(self.c['prefix'] + '/05-图谱/单篇/' + clean(nodes[r['graph_id']]['label']) + '.canvas', '关系详图') + ' · ' + (r.get('arxiv_id') or r.get('doi') or r.get('pmid') or '完整题名去重'))
         home += ['', '## 研究领域', ''] + ['- ' + wiki(paths[n['id']], n['label']) for n in atlas['nodes'] if n['kind'] == 'domain']
         home += ['', '## 阅读报告', ''] + ['- ' + wiki(p) for p in sorted(report_paths.values(), reverse=True)]
         if pending:
             home += ['', '## 新归档，待关系提取', ''] + ['- ' + r['title'] + ' · ' + wiki(r['report_file'], '阅读报告') for r in pending if r.get('report_file')]
         home += ['', '## 保存与更新', '', '已归档论文 ' + str(len(records) + len(pending)) + ' 篇；当前已入图 ' + str(len(records)) + ' 篇；知识节点 ' + str(len(atlas['nodes'])) + ' 个；关系 ' + str(len(atlas['edges'])) + ' 条。', '', '- 收集目标：每次 ' + str(self.c['papers_per_day']) + ' 篇；建议时刻 ' + self.c['collect_at'] + '（' + self.c['timezone'] + '）。', '- 图谱建议同步时刻：' + self.c['sync_at'] + '；实际是否启用以 Codex 定时任务为准。', '- 可直接编辑 `01-报告` 中的正文；下次同步按正文版本重新提取。', '- `我的笔记` 区域属于你，自动生成区若被修改会保留现场并报告冲突。', '- 删除/缺失文件不会被当作删除已有图谱的指令。', '', '' + wiki(self.c['prefix'] + '/使用说明')]
-        self.managed(self.root / '00-首页.md', '\n'.join(home), {'type': 'index', 'tags': ['ai-safety']})
+        self.managed(self.root / '00-首页.md', '\n'.join(home), {'type': 'index', 'research_domain': self.c['domain']['name'], 'tags': ['research', domain_tag(self.c)]})
         db = self.system / '图数据库'
         db.mkdir(exist_ok=True)
-        for name in ['ai-safety.lbug', 'atlas.json', 'state.json', 'validation.json']:
+        for name in [self.paths['database'], 'atlas.json', 'state.json', 'validation.json']:
             if (gen / name).exists():
                 shutil.copy2(gen / name, db / name)
         shutil.copy2(self.paths['out'] / 'provenance-registry.json', db / 'provenance-registry.json')
@@ -308,7 +314,8 @@ class Vault:
         groups = []
         cards = []
         y = 0
-        order = ['redteam', 'attack', 'alignment', 'control', 'evaluation', 'interpretability', 'general']
+        self.categories = atlas['categories']
+        order = list(dict.fromkeys(list(self.c['domain']['categories']) + ['general']))
         cats = [c for c in order if any((n.get('category', 'general') == c for n in selected))] + sorted({n.get('category', 'general') for n in selected} - set(order))
         for i in range(0, len(cats), 2):
             rowheight = 0
@@ -350,7 +357,8 @@ class Vault:
         return {'id': id or n['id'], 'type': 'text', 'text': text, 'x': x, 'y': y, 'width': width, 'height': height, 'color': self.atlas_category_color(n)}
 
     def atlas_category_color(self, n):
-        return {'redteam': '#e0ae66', 'attack': '#e17e80', 'alignment': '#b2a3f7', 'control': '#65c8ad', 'evaluation': '#92b2c5', 'interpretability': '#e9c285', 'general': '#92b2c5'}.get(n.get('category'), '#92b2c5')
+        categories = getattr(self, 'categories', self.c['domain']['categories'])
+        return categories.get(n.get('category', 'general'), {}).get('color', '#92b2c5')
 
     def focus_canvases(self, atlas, paths):
         nodes = {n['id']: n for n in atlas['nodes']}
@@ -447,9 +455,13 @@ class Vault:
         (docs, errors) = self.report_descriptors()
         failures += errors
         index = read(self.system / 'collection-index.json')
-        arxivs = [r['arxiv_id'] for r in index['records'] if r.get('arxiv_id')]
-        if len(set(arxivs)) != len(arxivs):
-            failures.append({'error': 'Duplicate paper identifiers'})
+        for key, canonicalize in [('arxiv_id', canonical_arxiv), ('doi', canonical_doi), ('pmid', canonical_pmid)]:
+            try:
+                identifiers = [canonicalize(r[key]) for r in index['records'] if r.get(key)]
+                if len(set(identifiers)) != len(identifiers):
+                    failures.append({'error': 'Duplicate paper identifiers: ' + key})
+            except ValueError as error:
+                failures.append({'error': str(error), 'field': key})
         result = {'checked_at': graph.now(), 'papers': len(index['records']), 'reports': len(docs), 'wikilinks': wiki_count, 'local_report_images': image_count, 'png_files': len(list((self.root / '附件/图表').rglob('*.png'))), 'pdf_files': len(list((self.root / '附件/PDF').glob('*.pdf'))), 'failures': failures}
         write(self.system / 'last-validation.json', result)
         if failures:
@@ -491,9 +503,9 @@ def main():
             existing = list(folder.glob(a.date + '｜*.md'))
             if len(existing) > 1:
                 raise ValueError('Multiple reports for this date; inspect and resume the intended source')
-            p = existing[0] if existing else folder / (a.date + '｜AI安全论文日报.md')
+            p = existing[0] if existing else folder / (a.date + '｜' + clean(v.c['domain']['name']) + '论文日报.md')
             if not p.exists():
-                p.write_text(front({'type': 'report', 'source_id': uuid.uuid4().hex, 'title': a.date + '｜' + a.title, 'reading_date': a.date, 'complete': False, 'tags': ['ai-safety', 'report']}) + '# ' + a.title + '\n\n待完成正文、来源和本地附件后，将 complete 改为 true。\n', encoding='utf-8')
+                p.write_text(front({'type': 'report', 'source_id': uuid.uuid4().hex, 'title': a.date + '｜' + a.title, 'reading_date': a.date, 'complete': False, 'research_domain': v.c['domain']['name'], 'tags': ['research', domain_tag(v.c), 'report']}) + '# ' + a.title + '\n\n待完成正文、来源和本地附件后，将 complete 改为 true。\n', encoding='utf-8')
             result = {'path': str(p), 'source_id': split_note(p.read_text(encoding='utf-8'))[0]['source_id']}
         elif a.command == 'register':
             index_path = v.system / 'collection-index.json'
@@ -515,6 +527,8 @@ def main():
                 if not (v.vault / r['pdf_local']).read_bytes().startswith(b'%PDF-'):
                     raise ValueError('Invalid PDF')
                 (meta, body) = split_note((v.vault / r['report_file']).read_text(encoding='utf-8'))
+                if meta.get('research_domain', v.c['domain']['name']) != v.c['domain']['name']:
+                    raise ValueError('Report belongs to another research domain')
                 if len(strip_generated(body)) < 80:
                     raise ValueError('Incomplete report body')
                 for target in re.findall('!\\[[^\\]]*\\]\\(([^)]+)\\)', body):
@@ -527,16 +541,18 @@ def main():
                     raise ValueError('Missing stable source_id')
                 if (v.vault / r['report_file']).parent.resolve() != (v.root / '01-报告').resolve():
                     raise ValueError('Report must be in the canonical reports directory')
-                arxiv = re.sub('v\\d+$', '', r.get('arxiv_id', ''))
+                arxiv = canonical_arxiv(r.get('arxiv_id'))
                 r['arxiv_id'] = arxiv or None
-                doi = lambda value: re.sub('^https?://(?:dx\\.)?doi\\.org/', '', str(value or '').strip(), flags=re.I).lower()
                 if r.get('doi'):
-                    r['doi'] = doi(r['doi'])
-                if arxiv and (not re.fullmatch('\\d{4}\\.\\d{4,5}', arxiv)):
-                    raise ValueError('Invalid canonical arXiv ID')
+                    r['doi'] = canonical_doi(r['doi'])
+                if r.get('pmid'):
+                    r['pmid'] = canonical_pmid(r['pmid'])
                 duplicate = False
                 for old in index['records']:
-                    same = bool({graph.norm(t) for t in [old['title']] + old.get('verified_title_aliases', [])} & {graph.norm(t) for t in [r['title']] + r.get('verified_title_aliases', [])}) or bool(arxiv and re.sub('v\\d+$', '', old.get('arxiv_id') or '') == arxiv) or bool(r.get('doi') and doi(old.get('doi')) == r['doi'])
+                    same = (bool({graph.norm(t) for t in [old['title']] + old.get('verified_title_aliases', [])} & {graph.norm(t) for t in [r['title']] + r.get('verified_title_aliases', [])})
+                            or bool(arxiv and canonical_arxiv(old.get('arxiv_id')) == arxiv)
+                            or bool(r.get('doi') and canonical_doi(old.get('doi')) == r['doi'])
+                            or bool(r.get('pmid') and canonical_pmid(old.get('pmid')) == r['pmid']))
                     if same:
                         if all((old.get(k) == r.get(k) for k in ['title', 'report_file', 'pdf_local', 'read_version'])):
                             duplicate = True

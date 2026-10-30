@@ -9,8 +9,8 @@
 
 只有完整正文和标题变化才需要提取；自动生成链接区不参与内容哈希。
 草稿、重复 ID、来源缺失、手改生成区和 Canvas 会报告错误。先解决这些问题，保留原文件和旧图，不把缺失当删除、不用 baseline 掩盖修订。
-如果 needs_extraction 为空、errors 为空、needs_finalize/needs_export 都为 false，且没有待发布，就安静结束。
-无须重新提取但 needs_finalize 为 true 时，执行本次 plan 的 finalize、validate、export；仅 needs_export 为 true 时直接恢复 graph export。
+如果 needs_extraction 为空、errors 为空、needs_rebuild/needs_finalize/needs_export 都为 false，且没有待发布，就安静结束。
+若 needs_rebuild 为 true（例如分类配置已修改），先运行 `graph refresh`，再重新 plan；保留原来源历史，不重新提取未变正文。无须重新提取但 needs_finalize 为 true 时，执行本次 plan 的 finalize、validate、export；仅 needs_export 为 true 时直接恢复 graph export。
 
 3. 读取当前 generation 的 atlas.json，复用已有 canonical ID。对每个变化的来源**完整阅读** fetch_file 指向的 JSON 正文，再创建 extraction JSON：
 
@@ -20,22 +20,25 @@
   "content_hash": "COPY_FROM_PLAN",
   "complete": true,
   "nodes": [
-    {"id": "p1", "label": "论文简称", "kind": "paper", "category": "attack",
-     "full_title": "已核实完整题名", "identity": {"arxiv": "2501.12345"},
-     "paper_url": "https://arxiv.org/abs/2501.12345v2", "summary": "有据概括", "limitation": "证据边界"},
-    {"id": "m1", "label": "方法", "kind": "method", "category": "attack"}
+    {"id": "p1", "label": "论文简称", "kind": "paper", "category": "general",
+     "full_title": "已核实完整题名", "identity": {"doi": "10.9999/example"},
+     "paper_url": "https://example.org/verified-paper", "summary": "有据概括", "limitation": "证据边界"},
+    {"id": "m1", "label": "方法", "kind": "method", "category": "general"}
   ],
   "edges": [
     {"source": "p1", "target": "m1", "relation": "implements", "label": "采用方法",
      "confidence": "EXTRACTED", "confidence_score": 1, "basis": "文章明确事实",
-     "evidence": "对应证据的准确转述", "evidence_url": "https://arxiv.org/abs/2501.12345v2",
+     "evidence": "对应证据的准确转述", "evidence_url": "https://example.org/verified-paper",
      "source_location": "日报的相关章节；原论文 §3 / 物理 PDF 第4页"}
   ]
 }
 ```
 
 上述是结构示例，不能作为真实研究证据。source_id/content_hash 必须逐项复制本次 plan 的值。
-kind 限 paper/domain/concept/method/benchmark/source。category 使用已有键或简洁英文键。
+kind 支持 paper/domain/concept/method/benchmark/dataset/theory/finding/source。用 concept 表达领域概念，用 theory/finding 表达有来源的理论或发现，不强制所有论文关联模型或基准。
+category 优先使用 domain.categories 与当前 atlas 的已有键，可增加当前学科所需分类，不照搬示例；name/color 和 Canvas 顺序由配置驱动。没有分类配置时只有通用后备类别。
+关系按实际论文选用 implements、evaluated_on、derives_from、supports、contradicts、conceptually_related_to、references 等稳定名称；既有同义关系尽量统一，不把存在引用误当作实验证实。
+identity 中 DOI、PMID、arXiv 均可选，full_title 必须准确，不要求每篇都有 arXiv。
 paper 的 verified_title_aliases 必须是已确认的完整题名变体；aliases 只用于显示和笔记链接。
 需要报告链接时添加 kind=source 的报告节点，与其讨论的实体建立有证据的 references 关系。
 实体和同名基准不盲目合并；历史实体升级为论文时，用 identity.same_as 指向已有 ID，并写出 identity.reason 的来源依据。

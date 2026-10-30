@@ -4,10 +4,11 @@ import argparse, copy, datetime as dt, hashlib, json, os, re, shutil, tempfile, 
 from urllib.parse import quote
 from collections import Counter
 from pathlib import Path
-from runtime_support import file_lock, load_config
+from runtime_support import (file_lock, load_config, config_environment, storage_names, domain_view,
+                             canonical_arxiv, canonical_doi, canonical_pmid)
 SCHEMA = 2
-KINDS = {'paper', 'domain', 'concept', 'method', 'benchmark', 'source'}
-DEFAULT_CATEGORIES = {'redteam': {'name': '自动化红队评估', 'color': '#e0ae66'}, 'attack': {'name': '注入机制与攻击', 'color': '#e17e80'}, 'alignment': {'name': '模型对齐防御', 'color': '#b2a3f7'}, 'control': {'name': '执行边界与自主性', 'color': '#65c8ad'}, 'general': {'name': '跨领域概念', 'color': '#92b2c5'}}
+KINDS = {'paper', 'domain', 'concept', 'method', 'benchmark', 'dataset', 'theory', 'finding', 'source'}
+DEFAULT_CATEGORIES = {'general': {'name': '通用', 'color': '#92b2c5'}}
 
 def now():
     return dt.datetime.now(dt.timezone.utc).isoformat()
@@ -87,30 +88,26 @@ def identity(s, n):
     keys = []
     strong = {}
     if paper:
-        arxiv = ident.get('arxiv') or n.get('arxiv_id')
-        if not arxiv:
-            m = re.search('(?:arxiv\\.org/(?:abs|pdf)/|arxiv:)(\\d{4}\\.\\d{4,5})', n.get('paper_url', ''), re.I)
-            arxiv = m.group(1) if m else None
-        if arxiv:
-            arxiv = re.sub('v\\d+$', '', arxiv.removeprefix('arXiv:').strip(), flags=re.I)
-            if not re.fullmatch('\\d{4}\\.\\d{4,5}', arxiv):
-                raise ValueError('Invalid arxiv id')
-            strong['arxiv'] = arxiv
-            keys.append('paper:arxiv:' + arxiv)
-        doi = ident.get('doi') or n.get('doi')
-        if doi:
-            doi = re.sub('^https?://(?:dx\\.)?doi\\.org/', '', doi.strip(), flags=re.I).lower()
-            if not doi.startswith('10.'):
-                raise ValueError('Invalid DOI')
-            strong['doi'] = doi
-            keys.append('paper:doi:' + doi)
+        identifiers = {
+            'arxiv': ident.get('arxiv') or n.get('arxiv_id'),
+            'doi': ident.get('doi') or n.get('doi'),
+            'pmid': ident.get('pmid') or n.get('pmid'),
+        }
+        if not identifiers['arxiv'] and re.match(r'https?://(?:www\.)?arxiv\.org/(?:abs|pdf)/', n.get('paper_url', ''), re.I):
+            identifiers['arxiv'] = n['paper_url']
+        for key, canonicalize in [('arxiv', canonical_arxiv), ('doi', canonical_doi), ('pmid', canonical_pmid)]:
+            value = canonicalize(identifiers[key])
+            if value:
+                strong[key] = value
+                keys.append('paper:' + key + ':' + value)
         full = n.get('full_title') or ident.get('title')
         if full:
             keys.append('paper:title:' + norm(full))
         for alias in n.get('verified_title_aliases', []):
             keys.append('paper:title:' + norm(alias))
         if not keys:
-            raise ValueError('Paper requires verified arxiv, DOI or full_title: ' + label)
+            raise ValueError('Paper requires verified arXiv, DOI, PMID or full_title: ' + label)
+        n['identity'] = {**ident, **strong}
     else:
         keys = ['entity:' + kind + ':' + norm(label)]
     for alias in n.get('aliases', []):
@@ -135,6 +132,8 @@ def identity(s, n):
             nid = 'paper_arxiv_' + slug(strong['arxiv'])
         elif strong.get('doi'):
             nid = 'paper_doi_' + digest(strong['doi'])[:20]
+        elif strong.get('pmid'):
+            nid = 'paper_pmid_' + strong['pmid']
         else:
             nid = kind + '_' + digest(keys[0])[:20]
         s['entities'][nid] = {'kind': kind, 'strong': {}, 'template': {}}
@@ -150,9 +149,16 @@ def identity(s, n):
 def blank():
     return {'schema_version': SCHEMA, 'created_at': now(), 'updated_at': None, 'entities': {}, 'alias_index': {}, 'legacy_ids': {}, 'sources': {}, 'discovery_baseline': {}, 'schedule': {'status': 'not_registered'}}
 
-def paths(workspace, site=None):
+def paths(workspace, site=None, config=None):
     w = Path(workspace).resolve()
-    return {'w': w, 'site': Path(site).resolve() if site else w / 'work/site', 'sync': w / 'work/sync', 'out': w / 'outputs/ai-safety-graph'}
+    config = config or (load_config() if config_environment() else None)
+    if config and Path(config['workspace']).resolve() != w:
+        raise ValueError('Workspace does not match configuration')
+    names = storage_names(config or {'schema': 2})
+    return {'w': w, 'site': Path(site).resolve() if site else w / 'work/site',
+            'sync': w / 'work/sync', 'out': w / 'outputs' / names['stem'],
+            'stem': names['stem'], 'database': names['database'], 'config': config}
+
 
 def load(p):
     pointer = p['sync'] / 'current.json'
@@ -244,13 +250,16 @@ def aggregate(state):
         if n.get('source_refs'):
             n['source_url'] = n['source_refs'][0]['url']
         n.pop('_origin', None)
-    categories = copy.deepcopy(DEFAULT_CATEGORIES)
+    research = state.get('research_domain', {'name': '研究', 'categories': {}})
+    categories = {**copy.deepcopy(DEFAULT_CATEGORIES), **copy.deepcopy(research['categories'])}
+    for item in categories.values():
+        item.setdefault('color', '#92b2c5')
     for n in nodes.values():
         cat = n.get('category', 'general')
         if cat not in categories:
             categories[cat] = {'name': next((m['label'] for m in nodes.values() if m.get('kind') == 'domain' and m.get('category') == cat), cat), 'color': '#a5b3c7'}
-    graph_hash = digest({'nodes': nodes, 'edges': edges, 'sources': sources})
-    return {'metadata': {'title': 'AI安全文献知识图谱', 'schema_version': SCHEMA, 'updated_at': state['updated_at'], 'snapshot_date': max((d['date'] for d in sources), default=now()[:10]), 'timezone': state['schedule'].get('timezone', 'UTC'), 'papers': sum((n.get('kind') == 'paper' for n in nodes.values())), 'source_pages': len(sources), 'source_revisions': sum((len(s['revisions']) for s in state['sources'].values())), 'storage': 'LadybugDB 0.17.0', 'automatic_sync': state['schedule'].get('status') == 'ACTIVE', 'sync_execution': 'Codex automation', 'schedule': state['schedule'], 'graph_hash': graph_hash, 'exported_from_persisted_database': True}, 'nodes': sorted(nodes.values(), key=lambda n: n['id']), 'edges': sorted(edges.values(), key=lambda e: e['id']), 'sources': sources, 'categories': categories}
+    graph_hash = digest({'nodes': nodes, 'edges': edges, 'sources': sources, 'domain': research})
+    return {'metadata': {'title': research['name'] + '文献知识图谱', 'domain': research['name'], 'schema_version': SCHEMA, 'updated_at': state['updated_at'], 'snapshot_date': max((d['date'] for d in sources), default=now()[:10]), 'timezone': state['schedule'].get('timezone', 'UTC'), 'papers': sum((n.get('kind') == 'paper' for n in nodes.values())), 'source_pages': len(sources), 'source_revisions': sum((len(s['revisions']) for s in state['sources'].values())), 'storage': 'LadybugDB 0.17.0', 'automatic_sync': state['schedule'].get('status') == 'ACTIVE', 'sync_execution': 'Codex automation', 'schedule': state['schedule'], 'graph_hash': graph_hash, 'exported_from_persisted_database': True}, 'nodes': sorted(nodes.values(), key=lambda n: n['id']), 'edges': sorted(edges.values(), key=lambda e: e['id']), 'sources': sources, 'categories': categories}
 
 def database(path, atlas):
     import ladybug
@@ -307,8 +316,9 @@ def native(atlas, path):
 
 def commit(p, state, reason):
     state['updated_at'] = now()
-    if os.environ.get('AI_SAFETY_OBSIDIAN_CONFIG'):
-        config = load_config()
+    if p.get('config'):
+        config = p['config']
+        state['research_domain'] = domain_view(config)
         state['schedule'].update(timezone=config['timezone'], collect_at=config['collect_at'], sync_at=config['sync_at'])
     atlas = aggregate(state)
     generation = now().replace(':', '').replace('.', '') + '_' + atlas['metadata']['graph_hash'][:10]
@@ -316,7 +326,7 @@ def commit(p, state, reason):
     dest.mkdir(parents=True)
     try:
         native(atlas, dest)
-        validation = database(dest / 'ai-safety.lbug', atlas)
+        validation = database(dest / p['database'], atlas)
         validation.update(verified_at=now(), reason=reason, graph_hash=atlas['metadata']['graph_hash'], source_pages=len(state['sources']), source_revisions=atlas['metadata']['source_revisions'])
         write(dest / 'atlas.json', atlas)
         write(dest / 'state.json', state)
@@ -332,7 +342,7 @@ def export(p):
     current = read(p['sync'] / 'current.json')
     gen = p['sync'] / 'generations' / current['generation']
     p['out'].mkdir(parents=True, exist_ok=True)
-    for name in ['atlas.json', 'ai-safety.lbug', 'validation.json', 'graphify.html', 'graphify.json']:
+    for name in ['atlas.json', p['database'], 'validation.json', 'graphify.html', 'graphify.json']:
         tmp = p['out'] / (name + '.tmp')
         shutil.copy(gen / name, tmp)
         os.replace(tmp, p['out'] / name)
@@ -370,19 +380,19 @@ def export(p):
     for e in atlas['edges']:
         g.add_edge(e['source'], e['target'], relation=e['relation'], confidence=e['confidence'], provenance=dumps(e['provenance']))
     nx.write_graphml(g, p['out'] / 'graph.graphml')
-    (p['out'] / 'GRAPH_REPORT.md').write_text(f"# AI安全图谱自动更新\n\n更新时间：{atlas['metadata']['updated_at']}\n\n论文 {atlas['metadata']['papers']} 篇，节点 {len(atlas['nodes'])}，关系 {len(atlas['edges'])}，来源页面 {len(atlas['sources'])}，版本 {atlas['metadata']['source_revisions']}。\n\n每条关系的 provenance 数组记录页面、内容哈希、证据、原文链接和位置。历史更正保存在 provenance-registry.json，当前图只采用每页的最新成功版本。原生 Graphify / GraphML 为每对端点的聚合视图；完整关系类型与所有出处以 atlas.json 和图数据库为准。\n\nToken成本不可从Agent工具可靠取得。\n", encoding='utf-8')
+    (p['out'] / 'GRAPH_REPORT.md').write_text(f"# {atlas['metadata']['title']}自动更新\n\n更新时间：{atlas['metadata']['updated_at']}\n\n论文 {atlas['metadata']['papers']} 篇，节点 {len(atlas['nodes'])}，关系 {len(atlas['edges'])}，来源页面 {len(atlas['sources'])}，版本 {atlas['metadata']['source_revisions']}。\n\n每条关系的 provenance 数组记录页面、内容哈希、证据、原文链接和位置。历史更正保存在 provenance-registry.json，当前图只采用每页的最新成功版本。原生 Graphify / GraphML 为每对端点的聚合视图；完整关系类型与所有出处以 atlas.json 和图数据库为准。\n\nToken成本不可从Agent工具可靠取得。\n", encoding='utf-8')
     down = p['site'] / 'dist/downloads'
     down.mkdir(parents=True, exist_ok=True)
     readme = p['out'] / 'README.md'
     if not readme.exists():
-        shutil.copy(Path(__file__).resolve().parents[1] / 'assets/EXPORT_README.md', readme)
+        readme.write_text((Path(__file__).resolve().parents[1] / 'assets/EXPORT_README.md').read_text(encoding='utf-8').replace('{{DOMAIN}}', atlas['metadata'].get('domain', '研究')).replace('{{DATABASE}}', p['database']), encoding='utf-8')
     for name in ['validation.json', 'README.md']:
         shutil.copy(p['out'] / name, down / name)
-    archive = p['w'] / 'outputs/ai-safety-graph.zip'
+    archive = p['w'] / 'outputs' / (p['stem'] + '.zip')
     with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as z:
         for file in sorted(p['out'].rglob('*')):
             if file.is_file():
-                z.write(file, Path('ai-safety-graph') / file.relative_to(p['out']))
+                z.write(file, Path(p['stem']) / file.relative_to(p['out']))
     shutil.copy(archive, down / archive.name)
     links = p['site'] / 'dist/obsidian-links.json'
     write(p['sync'] / 'last-bundle.json', {
@@ -390,7 +400,7 @@ def export(p):
         'links_hash': digest(read(links)) if links.exists() else None,
         'archive_sha256': hashlib.sha256(archive.read_bytes()).hexdigest(),
     })
-    config = load_config() if os.environ.get('AI_SAFETY_OBSIDIAN_CONFIG') else {}
+    config = p.get('config') or {}
     site = config.get('site', {})
     if not site.get('enabled'):
         return
@@ -407,7 +417,7 @@ def export_current(p):
     if not pointer.exists():
         return True
     marker = p['sync'] / 'last-bundle.json'
-    archive = p['w'] / 'outputs/ai-safety-graph.zip'
+    archive = p['w'] / 'outputs' / (p['stem'] + '.zip')
     links = p['site'] / 'dist/obsidian-links.json'
     if not marker.exists() or not archive.exists():
         return False
@@ -440,6 +450,7 @@ def main():
     a.add_argument('--batch', required=True)
     sub.add_parser('export')
     sub.add_parser('status')
+    sub.add_parser('refresh')
     cs = sub.add_parser('configure-schedule')
     cs.add_argument('--automation-id', required=True)
     m = sub.add_parser('mark-published')
@@ -454,6 +465,8 @@ def main():
             state = load(p)
             state['schedule'].update(status='ACTIVE', automation_id=args.automation_id)
             result = commit(p, state, 'registered Codex automation')
+        elif args.command == 'refresh':
+            result = commit(p, load(p), 'refresh configured domain taxonomy')
         elif args.command == 'apply':
             state = load(p)
             changes = 0
