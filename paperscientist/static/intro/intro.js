@@ -67,7 +67,13 @@ function ambient(){if(journey.value<.001&&!prelude.animating)return false;return
 function schedule(){if(frame||dead||document.hidden)return;data(root,'renderState',journey.moving?'moving':'ambient');frame=requestAnimationFrame(tick);}
 function wake(){if(!dead&&!document.hidden){if(!frame)last=0;schedule();}}
 function cancel(){cancelAnimationFrame(frame);frame=0;last=nextPaint=0;}
-function scrollJourney(delta){if(journey.wheel(delta,performance.now(),work.scrollRange())){audio.arm();if(reduced.matches)journey.snapToTarget();controls();wake();}}
+function scrollJourney(delta){
+  if(!journey.wheel(delta,performance.now(),work.scrollRange()))return;
+  if(reduced.matches)journey.snapToTarget();
+  // All positions on the open rail share the same chapter controls.
+  if(!journey.scrubbing){audio.arm();controls();}
+  wake();
+}
 root.addEventListener('wheel',e=>{if(credits.open||leaving||e.ctrlKey)return;e.preventDefault();const factor=e.deltaMode===1?20:e.deltaMode===2?innerHeight:1;scrollJourney((Math.abs(e.deltaX)>Math.abs(e.deltaY)?e.deltaX:e.deltaY)*factor);},{passive:false});
 previous.onclick=()=>go(Math.ceil(journey.target-.001)-1);next.onclick=()=>go(Math.floor(journey.target+.001)+1);
 root.addEventListener('pointermove',e=>{const x=e.clientX/innerWidth,y=e.clientY/innerHeight;if(journeyFrame(journey.value).work>.99){if(!reduced.matches&&work.animating)work.pointer(x*2-1,y*2-1);return;}root.style.setProperty('--mx',`${(x*100).toFixed(1)}%`);root.style.setProperty('--my',`${(y*100).toFixed(1)}%`);if(!reduced.matches){prelude.pointer(x*2-1,y*2-1);closing.pointer(x*2-1,y*2-1);scene?.pointer(x*2-1,y*2-1);warp.pointer(x-.5);if(journey.value<.12)wake();}},{passive:true});

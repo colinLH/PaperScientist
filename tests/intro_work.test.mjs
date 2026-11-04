@@ -79,30 +79,41 @@ test('cylindrical wall follows progress left, remains finite, and drawing resolu
  }
 });
 
-test('one wheel gesture advances a third of the viewport regardless of delta or trailing inertia',()=>{
+test('a short notch moves a third of the screen and a sustained roll crosses multiple curtains',()=>{
  for(const [w,h] of [[390,844],[1280,720],[3840,2160]]){
   const range=workScrollRange(w,h),layout=railLayout(w,h),j=new Journey(10);j.go(6.5,true);
-  const before=railCard(1,(j.target-6)/2,layout);
-  j.wheel(9000,0,range);
-  for(let t=16;t<300;t+=16){j.wheel(120,t,range);j.tick(1/60,11);}
-  assert.ok(Math.abs(j.target-(6.5+range.step))<1e-10);
-  const after=railCard(1,(j.target-6)/2,layout);assert.ok(Math.abs(before.x-after.x-w/3)<1e-8);
-  assert.ok(Math.abs(workDistance(.25+range.step/2,layout)-workDistance(.25,layout)-w/3)<1e-8);
-  const value=j.value,velocity=j.velocity;j.wheel(-120,310,range);
-  assert.equal(j.value,value);assert.equal(j.velocity,velocity);assert.ok(Math.abs(j.target-6.5)<1e-10);
-  j.wheel(30,600,range);assert.ok(Math.abs(j.target-(6.5+range.step))<1e-10);
+  const distance=position=>workDistance((position-6)/2,layout);
+  j.wheel(100,0,range);
+  assert.ok(Math.abs(distance(j.target)-distance(6.5)-w/3)<1e-8);
+  for(let i=1;i<=20;i++){
+   const before=j.value;
+   assert.equal(j.wheel(30,i*16,range),true);
+   j.tick(.016);
+   assert.ok(j.value>before && j.value<j.target);
+  }
+  for(let i=0;i<80;i++)j.tick(1/60);
+  assert.ok(distance(j.value)-distance(6.5)>2*layout.handoff);
+  const start=j.value;
+  j.wheel(6000,1800,range);
+  assert.ok(distance(j.target)-distance(start)<=2*w+1e-7);
+  j.tick(.016);
+  const visible=j.value;
+  j.wheel(-30,1820,range);
+  assert.equal(j.value,visible);
+  assert.ok(j.target<visible);
  }
 });
 
-test('small trackpad events accumulate once; entrance and exit retain boundary protection',()=>{
+test('trackpad deltas accumulate continuously; entrance and exit retain boundary protection',()=>{
  const range=workScrollRange(1280,720),j=new Journey(10);j.go(5,true);j.wheel(100,0,range);
  for(let t=10;t<200;t+=10)j.wheel(30,t,range);assert.equal(j.target,6);
  assert.equal(j.wheel(90,500,range),false);for(let i=0;i<120;i++)j.tick(1/60,6);
  for(let t=1000;t<1480;t+=16)j.wheel(3,t,range);
- assert.ok(Math.abs(j.target-(6+range.step))<1e-10);
+ assert.ok(Math.abs(j.target-(6+.9*range.step))<1e-10);
  j.go(8-range.step/2,true);j.wheel(9999,2000,range);assert.equal(j.target,8);
  j.wheel(100,2010,range);assert.equal(j.target,8);assert.equal(j.wheel(100,2400,range),false);
- for(let i=0;i<120;i++)j.tick(1/60,11);assert.equal(j.wheel(100,4000,range),true);assert.equal(j.target,9);
+ for(let i=0;i<120;i++)j.tick(1/60,11);for(let t=4000;t<4080;t+=16)j.wheel(3,t,range);
+ assert.equal(j.target,8);assert.equal(j.wheel(3,4080,range),true);assert.equal(j.target,9);
 });
 
 test('Work spring reaches the destination sooner without discontinuous mid-flight reversal',()=>{

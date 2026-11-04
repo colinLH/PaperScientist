@@ -8,9 +8,10 @@ export class Journey {
   snapToTarget(){this.value=this.target;this.velocity=0;this.boundaryTime=BOUNDARY_PAUSE;}
   wheel(delta, now, range=null) {
     const direction = Math.sign(delta);
-    if (!direction) return false;
+    if (!direction || !Number.isFinite(delta)) return false;
+    const directionChanged = direction !== this.direction;
     const inWork=range&&this.target>=range.start&&this.target<=range.end;
-    const fresh=now-this.lastWheel>(inWork?180:PAGE_GESTURE_GAP)||direction!==this.direction;
+    const fresh=now-this.lastWheel>(inWork?180:PAGE_GESTURE_GAP)||directionChanged;
     if (fresh) { this.used = false; this.delta = 0; }
     this.lastWheel = now; this.direction = direction; this.delta += delta;
     const ready=this.boundaryTime>=BOUNDARY_PAUSE;
@@ -21,19 +22,30 @@ export class Journey {
       // Do not let the inertia of the entrance gesture skip through the work.
       if(this.used&&!this.scrubbing&&!fresh)return false;
       const outside=this.target===range.start&&direction<0||this.target===range.end&&direction>0;
-      if(outside){if(!fresh||(!ready&&!reversing)||Math.abs(this.delta)<18)return false;this.used=true;this.go(this.target+direction);return true;}
+      if (outside) {
+        if (!ready && !reversing) this.used = true;
+        if (this.used || Math.abs(this.delta) < 18) return false;
+        this.used = true;
+        this.go(this.target + direction);
+        return true;
+      }
       if(!this.scrubbing&&!ready){this.used=true;return false;}
-      // A wheel/trackpad gesture owns one column. Its large initial delta and
-      // trailing inertia cannot race several previews across the viewport.
-      if(this.used&&!fresh||Math.abs(this.delta)<18)return false;
-      const next=clamp(this.target+direction*range.step,range.start,range.end);
-      this.used=true;this.scrubbing=true;const changed=next!==this.target;this.target=next;if(changed)this.boundaryTime=0;return changed;
+      // A typical 100px notch moves one third of a viewport. Small deltas
+      // add up continuously; cap a single device spike at two viewports.
+      const origin = this.scrubbing && directionChanged ? this.value : this.target;
+      const next = clamp(origin + clamp(delta / 100, -6, 6) * range.step, range.start, range.end);
+      this.used = true;
+      this.scrubbing = true;
+      this.target = next;
+      this.boundaryTime = 0;
+      return true;
     }
     if (this.used || Math.abs(this.delta) < 18) return false;
     if(!ready&&!reversing){this.used=true;return false;}
     this.used = true; this.go(this.target + direction); return true;
   }
   tick(dt, omega=5) {
+    if (this.scrubbing) omega = 20;
     // Exact critically damped spring. Retargeting preserves both position and
     // velocity, including a reversal halfway through a camera move.
     const x = this.value - this.target, b = this.velocity + omega * x;
