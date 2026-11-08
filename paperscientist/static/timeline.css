@@ -56,3 +56,36 @@ html,body{background:var(--ps-bg)!important;color:#ececec}body{margin:0}::select
 .ps-has-preview #workspace-tabs>.tab-nav{flex-wrap:wrap}
 @media(max-width:1000px){#app-shell.ps-has-preview{--ps-sidebar-width:220px}#app-shell.ps-has-preview>#workspace{padding-left:10px;padding-right:10px}}
 @media(max-width:800px){#app-shell.ps-has-preview{display:flex!important}.ps-preview-splitter{display:none}#app-shell>.ps-preview{position:fixed;inset:0 0 0 auto;width:min(94vw,640px);height:100dvh;z-index:50;border-left:1px solid #7775;box-shadow:-12px 0 40px #0005}}
+
+/* A persistent session rail above the tabs, including when inspecting the manuscript. */
+#paper-workflow { background: transparent; padding: 0; border: 0; min-width: 0; }
+.ps-workflow { margin: 0 0 12px; padding: 9px 14px 10px; color: #edeaf8; background: #1c1b2a; border: 1px solid #3b374c; border-radius: 12px; }
+.ps-workflow-title { display: flex; align-items: baseline; gap: 12px; line-height: 18px; margin-bottom: 8px; }
+.ps-workflow-title strong { font-size: 12px; font-weight: 600; }
+.ps-workflow-title > span { font-size: 11px; color: #c1bacd; }
+.ps-workflow ol { list-style: none; display: flex; padding: 0; margin: 0; gap: 0; }
+.ps-workflow li { position: relative; flex: 1 1 0%; min-width: 0; display: flex; align-items: center; gap: 6px; font-size: 11px; line-height: 18px; color: #afaabb; }
+.ps-workflow li:not(:last-child)::after { content: ""; height: 1px; flex: 1; margin: 0 7px 0 2px; background: #484356; }
+.ps-workflow li i { display: grid; place-items: center; width: 13px; height: 13px; box-sizing: border-box; flex: 0 0 auto; position: relative; border: 1.5px solid #716980; border-radius: 50%; font: bold 10px/1 sans-serif; }
+.ps-workflow li[data-status=done] i { background: #9edbc9; border-color: #9edbc9; color: #152c26; }
+.ps-workflow li[data-status=visited] i::after { content: ""; width: 4px; height: 4px; border-radius: 50%; background: #928aa6; }
+.ps-workflow li[aria-current=step] { color: #f2eaff; font-weight: 600; }
+.ps-workflow li[aria-current=step] i { border-color: #81729e; }
+.ps-workflow li[aria-current=step] i::before { content: ""; position: absolute; inset: 2.5px; border-radius: 50%; background: #ba9eff; }
+.ps-workflow li[aria-current=step] i::after { content: ""; position: absolute; inset: -3px; border-radius: 50%; border: 2px solid transparent; border-top-color: #d7c7ff; border-right-color: #a488fa; }
+.ps-workflow li[data-status=active] i::after { animation: ps-workflow-clockwise 1.3s linear infinite; }
+@keyframes ps-workflow-clockwise { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ps-workflow li[data-status=active] i::after { animation: none !important; } }
+@media (min-width: 651px) {
+  .ps-timeline { height: calc(100dvh - 390px); }
+  #chat-tab:has(#research-question) .ps-timeline { height: max(300px,calc(100dvh - 680px)); }
+}
+@media (max-width: 1050px) {
+  .ps-workflow li { flex-direction: column; gap: 4px; }
+  .ps-workflow li:not(:last-child)::after { position: absolute; top: 6px; left: calc(50% + 11px); right: calc(-50% + 11px); margin: 0; }
+}
+@media (max-width: 650px) {
+  .ps-workflow { padding: 8px 4px; margin-bottom: 8px; }
+  .ps-workflow-title { padding: 0 6px; }
+  .ps-workflow li { font-size: 10px; }
+}

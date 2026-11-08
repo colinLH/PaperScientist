@@ -22,6 +22,7 @@ from .run_store import RunStore
 from .store import dumps
 from .tools import ToolSet
 from .timeline import category, markdown
+from .workflow import Stage
 from .agent_profiles import HarnessViolation, permits
 
 
@@ -62,6 +63,8 @@ bounded exact replacements or appends. Do not repeatedly regenerate a large trun
 Before a meaningful group of tools, briefly tell the user what you are doing and why in your
 normal visible response. Share concise progress and verified findings, never private reasoning.
 Use Markdown file links with workspace-relative paths for generated deliverables.
+For manuscript work, include the current stage in report_progress when entering or revisiting a phase.
+List a completed stage only when you can point to a concrete achieved milestone in that update.
 When only a text answer was requested, finish_research may have an empty artifacts list.
 After a progress message, make the next concrete tool call or finish. Repeated text-only
 responses without actions trigger an automatic pause to avoid wasting the user's budget.
@@ -273,14 +276,14 @@ class RunManager:
                     return {"summary": summary, "artifacts": artifacts, "limitations": limitations}
 
                 @tool
-                def report_progress(update: str) -> dict:
+                def report_progress(update: str, stage: Stage | None = None, completed_stages: list[Stage] | None = None) -> dict:
                     """Show a concise user-facing progress update: verified findings, uncertainty and next action.
 
-                    Use before a meaningful tool batch and after important results. Not hidden reasoning.
+                    For a paper, optionally identify the current stage and any stages just completed.
                     """
                     if not update.strip() or len(update) > 1200:
                         raise ValueError('进展更新需为 1–1200 个字符')
-                    return {'update': update.strip()}
+                    return {'update': update.strip(), 'stage': stage, 'completed': list(dict.fromkeys(completed_stages or []))}
 
                 tools = local.tools + remote + [t for t in (ask_user_question, finish_research, report_progress)
                                                if profile.allows_tool(t.name)]
@@ -441,6 +444,8 @@ class RunManager:
                     presentation = []
                     if name == 'report_progress' and status == 'success':
                         update = value['update']
+                        if value.get('stage') or value.get('completed'):
+                            presentation.append(('workflow', {'stage': value.get('stage'), 'completed': value.get('completed', [])}))
                         presentation.append(('assistant_commit', {'id': 'progress-'+call['id'], 'text': update,
                                             'html': markdown(update, self.store, sid), 'purpose': 'progress'}))
                     elif name == 'report_progress':

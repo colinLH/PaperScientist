@@ -225,7 +225,7 @@ class TimelineTests(unittest.IsolatedAsyncioTestCase):
         cursor = self.service.timeline.emit('s', tid, 'assistant_start', {'id':'a'})
         self.service.timeline.emit('s', tid, 'assistant_delta', {'id':'a','text':'hello\nworld'})
         app = create_app(service=self.service, with_ui=False)
-        endpoint = next(r.endpoint for r in app.routes if r.path == '/api/sessions/{sid}/events')
+        endpoint = next(r.endpoint for r in app.routes if getattr(r, 'path', None) == '/api/sessions/{sid}/events')
         class Request:
             headers = {'last-event-id': str(cursor)}
             calls = 0

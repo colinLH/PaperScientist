@@ -8,6 +8,7 @@ import gradio as gr
 
 from .ui_theme import CSS, HEAD, theme
 from .timeline import mount as timeline_mount
+from .workflow import session_workflow, workflow_html
 from .workspace import Workspace
 from .workspace_actions import WorkspaceActions
 from .sidebar import sidebar_html, SIDEBAR_JS, SIDEBAR_CSS
@@ -54,6 +55,7 @@ def mount_ui(app, service):
                     gr.Markdown("[重播开场](/welcome)", elem_classes="nav-caption")
             with gr.Column(elem_id="workspace", scale=4):
                 heading = gr.HTML('<div class="breadcrumb"><span>▱ 我的研究</span><b>/</b><strong>新对话</strong></div>', elem_id="workspace-heading")
+                progress = gr.HTML("", elem_id="paper-workflow", apply_default_css=False)
                 with gr.Tabs(elem_id="workspace-tabs", key="workspace-tabs", preserved_by_key=["selected"]) as tabs:
                     with gr.Tab("对话", id="chat", elem_id="chat-tab"):
                         chat = gr.HTML(timeline_mount(""), elem_id="workspace-chat", apply_default_css=False,
@@ -144,7 +146,7 @@ def mount_ui(app, service):
         args = [query, session_id, project_id, model, api_key, execution, pending, view, continuous]
         event = send.click(submit, args, outputs, concurrency_limit=8, show_progress="hidden")
         enter_event = query.submit(submit, args, outputs, concurrency_limit=8, show_progress="hidden")
-        reset_outputs = [session_id, project_id, chat, status, *panel_outputs, revision, heading, query, pending, chips, clear_files, *controls, tabs]
+        reset_outputs = [session_id, project_id, chat, status, *panel_outputs, revision, heading, query, pending, chips, clear_files, *controls, progress, tabs]
 
         def reset(sid, pid, note):
             if service.store.get_session(sid):
@@ -153,7 +155,7 @@ def mount_ui(app, service):
             run = service.runs.db.latest(sid)
             busy = bool(run and run['status'] in {'queued', 'running', 'recovering', 'waiting_input'})
             buttons = control_updates(busy, is_archived)
-            return sid, pid, timeline_mount(sid), note, *panels(sid, pid), uuid.uuid4().hex, workspace.heading(sid, pid), gr.update(value="", interactive=not is_archived), [], "", gr.skip(), *buttons, gr.update(selected="chat")
+            return sid, pid, timeline_mount(sid), note, *panels(sid, pid), uuid.uuid4().hex, workspace.heading(sid, pid), gr.update(value="", interactive=not is_archived), [], "", gr.skip(), *buttons, workflow_html(session_workflow(service.store, sid, run)), gr.update(selected="chat")
 
         async def new_session(pid, previous_sid, view_state):
             view_state["generation"] += 1
@@ -294,15 +296,21 @@ def mount_ui(app, service):
         ui.load(initial_workspace, outputs=reset_outputs, show_progress="hidden")
 
         poll_outputs = [chat, status, *panel_outputs, revision, heading, *controls,
-                        question_panel, question_text, question_options, question_answer, question_id, resume_button, execution_note]
+                        question_panel, question_text, question_options, question_answer, question_id, resume_button, execution_note, progress]
         def poll_run(sid, pid, view_state, enabled):
             run = service.runs.db.latest(sid)
             stamp = (sid, run["id"] if run else None, run["updated_at"] if run else None)
-            if view_state.get("run_stamp") == stamp:
+            same_run = view_state.get("run_stamp") == stamp
+            if same_run and (not run or run["status"] != "running"):
                 return [gr.skip()] * len(poll_outputs)
+            paper = workflow_html(session_workflow(service.store, sid, run))
+            changed_progress = paper if paper != view_state.get("paper_progress") else gr.skip()
+            view_state["paper_progress"] = paper
+            if same_run:
+                return *[gr.skip()] * (len(poll_outputs) - 1), changed_progress
             view_state["run_stamp"] = stamp
             if not run:
-                return *[gr.skip()] * 14, gr.update(visible=False), gr.skip(), gr.skip(), gr.skip(), "", gr.update(visible=False), ("允许本地执行" if enabled else "本地执行已关闭")
+                return *[gr.skip()] * 14, gr.update(visible=False), gr.skip(), gr.skip(), gr.skip(), "", gr.update(visible=False), ("允许本地执行" if enabled else "本地执行已关闭"), changed_progress
             state = run["status"]
             waiting = state == "waiting_input"
             busy = state in {"queued", "running", "recovering", "waiting_input"}
@@ -321,7 +329,7 @@ def mount_ui(app, service):
                     gr.update(choices=question.get("options", []), value=None) if changed else gr.skip(),
                     gr.update(value="") if changed else gr.skip(), qid,
                     gr.update(visible=state in {"paused", "error", "stopped"} and not readonly),
-                    ("本任务允许本地执行" if run["config"]["settings"]["allow_execution"] else "本任务本地执行已关闭") if busy else ("允许本地执行" if enabled else "本地执行已关闭"))
+                    ("本任务允许本地执行" if run["config"]["settings"]["allow_execution"] else "本任务本地执行已关闭") if busy else ("允许本地执行" if enabled else "本地执行已关闭"), changed_progress)
 
         async def answer_question(sid, qid, selected, answer):
             run = service.runs.db.latest(sid)

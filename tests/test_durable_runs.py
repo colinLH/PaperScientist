@@ -10,6 +10,7 @@ from paperscientist.context import ContextManager
 from paperscientist.config import Settings
 from paperscientist.runtime import AgentService
 from paperscientist.workspace_actions import WorkspaceActions
+from paperscientist.workflow import session_workflow
 from langchain_core.tools import tool
 
 
@@ -125,9 +126,9 @@ class DurableRuns(unittest.IsolatedAsyncioTestCase):
 
     async def test_progress_without_content_is_visible_ordered_and_durable(self):
         model = Model([
-            AIMessage(content='', tool_calls=[call('report_progress', {'update':'先检查现有记录，再整理结果。'}, 'p1'),
+            AIMessage(content='', tool_calls=[call('report_progress', {'update':'先检查现有记录，再整理结果。','stage':'literature'}, 'p1'),
                                              call('write_file', {'path':'note.md','content':'verified'}, 'w1')]),
-            AIMessage(content='', tool_calls=[call('report_progress', {'update':'已写入记录，接下来核对交付文件。'}, 'p2'),
+            AIMessage(content='', tool_calls=[call('report_progress', {'update':'已写入记录，接下来核对交付文件。','stage':'writing','completed_stages':['literature']}, 'p2'),
                                              call('finish_research', {'summary':'完成','artifacts':['note.md'],'limitations':[]}, 'f1')])])
         service = self.service(model)
         run = await service.runs.start('s1', '整理记录')
@@ -138,6 +139,9 @@ class DurableRuns(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([i['text'] for i in visible], ['先检查现有记录，再整理结果。','已写入记录，接下来核对交付文件。','完成'])
         self.assertLess(next(i for i,x in enumerate(items) if x['id']=='progress-p1'),next(i for i,x in enumerate(items) if x['id']=='w1'))
         self.assertFalse(any(x.get('name')=='report_progress' for x in items))
+        self.assertEqual({s['id']:s['status'] for s in session_workflow(service.store, 's1', result)['steps']},
+                         {'idea':'pending', 'literature':'done', 'design':'pending', 'evaluation':'pending',
+                          'writing':'current', 'review':'pending', 'delivery':'pending'})
 
     async def test_progress_only_does_not_bypass_no_progress_guard(self):
         model = Model([AIMessage(content='', tool_calls=[call('report_progress', {'update':'正在准备'}, 'p'+str(i))]) for i in range(3)])

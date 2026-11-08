@@ -68,6 +68,8 @@ class Store:
                 CREATE TABLE IF NOT EXISTS events(
                     id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT, kind TEXT,
                     data TEXT, created_at TEXT);
+                CREATE INDEX IF NOT EXISTS workflow_tool_results
+                    ON events(session_id,json_extract(data,'$.name'),id) WHERE kind='tool_result';
                 CREATE TABLE IF NOT EXISTS papers(
                     id TEXT, owner TEXT, data TEXT, PRIMARY KEY(id,owner));
                 CREATE TABLE IF NOT EXISTS artifacts(
