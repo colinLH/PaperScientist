@@ -326,10 +326,9 @@ class ToolSet:
 
         @tool
         async def figure_forge(spec_path: str, brief: str) -> dict:
-            """FIRST-CHOICE paper figure tool: retrieve Top-Conf Figure Gallery layouts and render an existing JSON spec to editable SVG/drawio, PDF, PNG, with data/code/provenance. Load figure-forge skill for schema. Uses local Python, not upstream image-model inference."""
-            from .figure_forge import create_figure
-            async with self.service.plot_lock:
-                return await asyncio.to_thread(create_figure, store, sid, spec_path, brief)
+            """Create a paper figure from a workspace JSON spec. Use results for CSV charts, framework for editable diagrams, or illustration for a conceptual PNG/PDF from MicuAPI. Only an illustration sends its standalone prompt to the configured provider. Load figure-forge for schema."""
+            from .figure_forge import create_agent_figure
+            return await create_agent_figure(store, sid, spec_path, brief, cfg, self.service.plot_lock)
 
         @tool
         async def plot_results(csv_path: str, x: str, y: str, group: str | None = None, error: str | None = None,

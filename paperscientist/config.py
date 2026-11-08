@@ -9,6 +9,7 @@ from dotenv import dotenv_values
 from .credentials import load_credentials
 
 ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_IMAGE_MODEL = "gpt-image-2.6-sunburst"
 
 
 @dataclass(frozen=True)
@@ -27,6 +28,7 @@ class Settings:
     extract_memory: bool = True
     skill_roots: tuple[Path, ...] = (ROOT / "research_skills", ROOT / "external_skills")
     credentials: dict[str, str] = field(default_factory=dict, repr=False)
+    image_model: str = DEFAULT_IMAGE_MODEL
 
     @classmethod
     def load(cls, **overrides):
@@ -44,6 +46,7 @@ class Settings:
         return cls(
             data_dir=(ROOT / Path(values.get("PS_DATA_DIR") or ".paperscientist")).resolve(),
             model=model,
+            image_model=values.get("PS_IMAGE_MODEL") or DEFAULT_IMAGE_MODEL,
             context_tokens=int(values.get("PS_CONTEXT_TOKENS", 64000)),
             output_tokens=int(values.get("PS_OUTPUT_TOKENS", 4096)),
             max_steps=int(values.get("PS_MAX_STEPS", 24)),

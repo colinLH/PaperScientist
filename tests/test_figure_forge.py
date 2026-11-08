@@ -31,6 +31,7 @@ def test_real_bundle_is_editable_and_reproducible(workspace, tmp_path, monkeypat
     monkeypatch.setattr(figure_forge,'search_references',lambda brief:{'available':True,'references':[]})
     result=figure_forge.create_figure(store,sid,'spec.json','fault outcomes')
     folder=base/result['directory']
+    assert result['contract']['source_spec_sha256']==hashlib.sha256((base/'spec.json').read_bytes()).hexdigest()
     assert result['contract']['panels'][0]['provenance']=='user_supplied'
     assert not result['contract']['panels'][0]['reporting_gaps']
     assert all((folder/f'figure.{ext}').stat().st_size>100 for ext in ('png','pdf','svg'))
