@@ -24,11 +24,13 @@ python -m uvicorn web.app:app --host 127.0.0.1 --port 8888
 
 左侧以项目组织多个聊天，并提供最近对话与搜索。点击项目下的「新聊天」开始独立的多轮会话；首问会被模型总结成简短标题。同项目共享项目记忆和论文库。输入框左下角「＋」添加论文、数据或代码，右下角选择模型，「⚙」设置临时密钥和本地执行权限。
 
-在 `.env` 中设置：
+首次配置时，复制根目录的 [.env.example](.env.example) 为 `.env`。已有 `.env` 的用户直接编辑该文件即可。聊天、检索和论文配图服务的密钥都可以在这里填写。Git 忽略本机的 `.env`。
 
 ```dotenv
 PS_MODEL=deepseek:deepseek-chat
-DEEPSEEK_API_KEY=你的密钥
+DEEPSEEK_API_KEY=
+MICUAPI_API_KEY=
+PS_IMAGE_MODEL=gpt-image-2.6-sunburst
 PS_ALLOW_EXECUTION=false
 ```
 
@@ -42,6 +44,10 @@ PS_ALLOW_EXECUTION=false
 - “选第二个方向。把创新主张拆成可证伪假设，给出每个实验要回答的问题。”
 - “实现方法与基线，跑三个 seed，保留原始结果和运行日志，再画误差棒图。”
 - “让 reviewer 独立审查这些结果，然后把有证据支撑的部分整理成 LaTeX 草稿。”
+
+**论文配图。** 在聊天中说明读者应该看懂什么，以及图要占一栏还是两栏。例如：“用 MicuAPI 画一张单栏概念图，说明检索到的文档如何作为数据进入助手，以及工具执行前在哪里做权限检查。” Agent 可以把这段绘图说明发给图像模型，返回 PNG 和按稿件尺寸排版的 PDF。需要精确标注模块和连线时，可要求生成可编辑的框架图；画实验结果时，指定工作区 CSV、指标和单位，Agent 会按实际数据绘制矢量图。[配图规格和示例](research_skills/figure-forge/specification.md)
+
+**会话进度。** 工作台顶部显示当前聊天从选题到交付的七个阶段。正在执行的阶段有顺时针转动的圆环，完成的节点打勾。暂停或等待回答时保留阶段位置。切换聊天或刷新后，进度从该会话的记录恢复。
 
 运行生成代码前，勾选 Web 中“允许运行工作区 Python / LaTeX”。这是在本机执行可信研究代码，**不是隔离沙箱**。默认只监听回环地址；此版本面向单人本地使用，没有多人服务的鉴权隔离。部署到公网前需要单独加入认证与容器隔离。
 
@@ -65,6 +71,8 @@ PS_ALLOW_EXECUTION=false
 ## 配置与扩展
 
 配置项见 [.env.example](.env.example)。`PS_CONTEXT_TOKENS` / `PS_OUTPUT_TOKENS` 控制上下文与输出预算；`PS_MAX_STEPS` 默认 24，复杂任务达到预算后保留现场并可继续；`PS_MAX_SUBAGENTS` 默认 3。
+
+论文撰写使用 `PS_MODEL` 对应的聊天服务。概念插图另用 `MICUAPI_API_KEY` 和 `PS_IMAGE_MODEL`。适配器先调用 MicuAPI 的 `/v1/chat/completions`；若服务明确返回 404 和 “Unknown endpoint”，再向同一服务的 `/v1/images/generations` 请求一次。每张生成图的 `figure_contract.json` 记录实际模型、接口和绘图说明。
 
 学术搜索中 arXiv、Crossref 不需要密钥；OpenAlex 可配置 `OPENALEX_API_KEY`。通用网页搜索配置 `TAVILY_API_KEY` 或 `SERPAPI_API_KEY`。服务的配额与网络错误会返回模型，不能据此宣称“没有相关工作”。
 
