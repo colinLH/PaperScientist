@@ -55,19 +55,27 @@ def mount_ui(app, service):
                     refresh = gr.Button("↻  刷新", size="sm", min_width=60)
                     gr.Markdown("[重播开场](/welcome)", elem_classes="nav-caption")
             with gr.Column(elem_id="workspace", scale=4):
-                heading = gr.HTML('<div class="breadcrumb"><span>▱ 我的研究</span><b>/</b><strong>新对话</strong></div>', elem_id="workspace-heading")
-                progress = gr.HTML("", elem_id="paper-workflow", apply_default_css=False)
+                with gr.Column(elem_id="workspace-overview", scale=0, min_width=0):
+                    heading = gr.HTML('<div class="breadcrumb"><span>▱ 我的研究</span><b>/</b><strong>新对话</strong></div>', elem_id="workspace-heading")
+                    progress = gr.HTML("", elem_id="paper-workflow", apply_default_css=False)
                 with gr.Tabs(elem_id="workspace-tabs", key="workspace-tabs", preserved_by_key=["selected"]) as tabs:
                     with gr.Tab("对话", id="chat", elem_id="chat-tab"):
-                        chat = gr.HTML(timeline_mount(""), elem_id="workspace-chat", apply_default_css=False,
-                                       js_on_load="import('/api/ui/timeline.js?v=3').then(m => m.mount(element));")
-                        question_id = gr.State("")
-                        with gr.Column(visible=False, elem_id="research-question") as question_panel:
-                            question_text = gr.Markdown()
-                            question_options = gr.Radio(choices=[], label="建议选项（也可直接填写回答）")
-                            question_answer = gr.Textbox(label="你的回答", lines=2)
-                            answer_button = gr.Button("提交回答并继续", variant="primary")
-                        resume_button = gr.Button("继续未完成的任务", visible=False)
+                        with gr.Column(elem_id="chat-body"):
+                            chat = gr.HTML(timeline_mount(""), elem_id="workspace-chat", apply_default_css=False,
+                                           js_on_load="import('/api/ui/timeline.js?v=4').then(m => m.mount(element));")
+                            with gr.Column(elem_id="chat-options"):
+                                question_id = gr.State("")
+                                with gr.Column(visible=False, elem_id="research-question") as question_panel:
+                                    question_text = gr.Markdown()
+                                    question_options = gr.Radio(choices=[], label="建议选项（也可直接填写回答）")
+                                    question_answer = gr.Textbox(label="你的回答", lines=2)
+                                    answer_button = gr.Button("提交回答并继续", variant="primary")
+                                resume_button = gr.Button("继续未完成的任务", visible=False, elem_id="resume-run")
+                                with gr.Column(visible=False, elem_id="settings-panel", key="settings-panel", preserved_by_key=["visible"]) as settings_panel:
+                                    api_key = gr.Textbox(label="临时 API Key（可选）", type="password", placeholder="留空使用服务端配置；不会写入对话")
+                                    execution = gr.Checkbox(value=service.settings.allow_execution, label="允许运行工作区 Python / LaTeX")
+                                    continuous = gr.Checkbox(value=True, label="持续执行研究任务，遇到关键决策时暂停提问")
+                                    gr.Markdown("使用本机 Python 执行研究代码。模型选择对下一轮生效。")
                         with gr.Column(elem_id="composer"):
                             chips = gr.HTML("", elem_id="attachments")
                             clear_files = gr.Button("移除附件", size="sm", elem_id="clear-attachments")
@@ -85,11 +93,6 @@ def mount_ui(app, service):
                                 stop = gr.Button("■", visible=False, size="sm", scale=0, min_width=36, elem_id="stop")
                                 send = gr.Button("↑", size="sm", scale=0, min_width=36, elem_id="send", key="send", preserved_by_key=["interactive"])
                         status = gr.Markdown("同一项目共享记忆 · Enter 发送 / Shift + Enter 换行", elem_id="status")
-                        with gr.Column(visible=False, elem_id="settings-panel", key="settings-panel", preserved_by_key=["visible"]) as settings_panel:
-                            api_key = gr.Textbox(label="临时 API Key（可选）", type="password", placeholder="留空使用服务端配置；不会写入对话")
-                            execution = gr.Checkbox(value=service.settings.allow_execution, label="允许运行工作区 Python / LaTeX")
-                            continuous = gr.Checkbox(value=True, label="持续执行研究任务，遇到关键决策时暂停提问")
-                            gr.Markdown("使用本机 Python 执行研究代码。模型选择对下一轮生效。")
                     with gr.Tab("研究路线", id="routes"):
                         routes = gr.HTML("", elem_id="project-routes", apply_default_css=False,
                                          js_on_load="import('/api/ui/routes.js?v=1').then(m => m.mount(element));")

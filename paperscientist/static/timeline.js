@@ -15,6 +15,30 @@ function button(label,fn,cls=''){const b=el('button',cls,label);b.type='button';
 function fileIcon(path){const e=el('span','ps-file-icon');const ext=path.split('.').pop().toUpperCase();if(['PDF','CSV','XLSX'].includes(ext)){e.textContent=ext;e.dataset.ext=ext;}else e.append(icon('file'));return e;}
 async function request(url,options){const r=await fetch(url,options);if(!r.ok){let msg=await r.text();try{msg=JSON.parse(msg).detail||msg;}catch{}throw Error(msg);}return r.json();}
 
+// Some mobile keyboards shrink the visual viewport while leaving CSS viewport units unchanged.
+function fitVisualViewport(shell, signal) {
+  const viewport = window.visualViewport;
+  if (!shell || !viewport) return;
+  function reset() {
+    shell.removeAttribute('data-keyboard-viewport');
+    shell.style.removeProperty('--ps-visible-height');
+    shell.style.removeProperty('--ps-visible-top');
+  }
+  function sync() {
+    if (viewport.scale !== 1 || window.innerHeight - viewport.height < 2) {
+      if (shell.hasAttribute('data-keyboard-viewport')) reset();
+      return;
+    }
+    shell.setAttribute('data-keyboard-viewport', '');
+    shell.style.setProperty('--ps-visible-height', viewport.height + 'px');
+    shell.style.setProperty('--ps-visible-top', viewport.offsetTop + 'px');
+  }
+  viewport.addEventListener('resize', sync, {signal});
+  viewport.addEventListener('scroll', sync, {signal});
+  signal.addEventListener('abort', reset, {once: true});
+  sync();
+}
+
 export function mount(element){
   window.__psTimelineCleanup?.();
   let host,scroll,list,rail,tip,live,jump,connection,sid='',generation=0,source,cursor=0,frame=0;
@@ -22,6 +46,7 @@ export function mount(element){
   let dirty=new Set(),activeId=null,scrollFrame=0,renderTimer=0,sessionAbort,dialogAbort;
   let previewShell,previewSplitter,previewController,previewOpener,previewShare=50;
   const controller=new AbortController();
+  fitVisualViewport(element.closest('#app-shell'), controller.signal);
   const url=(route,query={})=>`/api/sessions/${encodeURIComponent(sid)}/${route}?${new URLSearchParams(query)}`;
   const setConnection=(text,bad=false)=>{if(connection){connection.textContent=text;connection.classList.toggle('ps-warning',bad);}};
   function cleanup(){closed=true;generation++;source?.close();observer.disconnect();controller.abort();sessionAbort?.abort();closeDialog();cancelAnimationFrame(frame);cancelAnimationFrame(scrollFrame);clearTimeout(renderTimer);clearTimeout(hoverTimer);host?.remove();views.clear();dirty.clear();turns=[];}
