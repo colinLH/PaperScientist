@@ -147,3 +147,59 @@ def test_profile_grid_respects_planned_facets_missing_cells_and_shared_scale(tmp
                 figure_render._profile_grid(fig, panel, bad)
         finally:
             plt.close(fig)
+
+
+def test_mechanism_grid_and_branches_survive_offline_replay(workspace, tmp_path, monkeypatch):
+    import subprocess
+    import sys
+    from xml.etree import ElementTree
+    from PIL import Image, ImageChops
+    from pypdf import PdfReader
+
+    store, sid, base = workspace
+    spec = {
+        'type':'framework','layout':'mechanism',
+        'groups':[{'id':'q','label':'Parse'},{'id':'gate','label':'Policy'}],
+        'nodes':[
+            {'id':'value','group':'q','label':'Typed value','cells':[['Source','mail'],['Type','address']],
+             'accent_cells':[[0,1]]},
+            {'id':'gate','group':'gate','label':'Check origin'},
+            {'id':'hold','group':'gate','row':1,'label':'Hold'},
+            {'id':'allow','group':'gate','row':1,'label':'Allow'},
+        ],
+        'edges':[{'source':'value','target':'gate','waypoints':[[254,24]]},{'source':'gate','target':'hold'},
+                 {'source':'gate','target':'allow'}]}
+    (base/'spec.json').write_text(json.dumps(spec))
+    monkeypatch.setattr(figure_forge,'search_references',lambda brief:{'available':True,'references':[]})
+    result = figure_forge.create_figure(store,sid,'spec.json','compact trace')
+    folder = base/result['directory']
+    doc = ElementTree.parse(folder/'figure.drawio')
+    cells = {cell.get('id'):cell for cell in doc.iter('mxCell')}
+    waypoint = cells['e0'].find('.//mxPoint')
+    assert float(waypoint.get('x')) == pytest.approx(254*4/3)
+    assert float(waypoint.get('y')) == pytest.approx(24*4/3)
+    assert cells['cell:nvalue:1:1'].get('value') == 'mail'
+    assert cells['cell:nvalue:1:1'].get('parent') == 'nvalue'
+    assert 'fillColor=white' not in cells['cell:nvalue:1:1'].get('style')
+    assert cells['nhold'].find('mxGeometry').get('y') == cells['nallow'].find('mxGeometry').get('y')
+    assert cells['nhold'].find('mxGeometry').get('x') != cells['nallow'].find('mxGeometry').get('x')
+    assert not ElementTree.parse(folder/'figure.svg').findall('.//{http://www.w3.org/2000/svg}image')
+    page = PdfReader(folder/'figure.pdf').pages[0]
+    assert float(page.mediabox.height) < 3*72
+    assert 'mail' in page.extract_text()
+    first = Image.open(folder/'figure.png').convert('RGB')
+    subprocess.run([sys.executable, 'render.py', 'spec.json'], cwd=folder, check=True, capture_output=True)
+    assert ImageChops.difference(first,Image.open(folder/'figure.png').convert('RGB')).getbbox() is None
+
+
+@pytest.mark.parametrize(('cells','accents','message'),[
+    ([['A','B'],['C']], [], 'same number'),
+    ([['A','B']], [[0,2]], 'outside table'),
+    ([['W'*160]], [], 'does not fit'),
+])
+def test_compact_mechanism_rejects_false_or_unreadable_cells(tmp_path,cells,accents,message):
+    spec={'type':'framework','layout':'mechanism','size':[3.55,2.3],
+          'groups':[{'id':'one','label':'One'}],
+          'nodes':[{'id':'field','group':'one','label':'Field','cells':cells,'accent_cells':accents}]}
+    with pytest.raises(ValueError,match=message):
+        figure_render.render_document(spec,tmp_path,tmp_path)

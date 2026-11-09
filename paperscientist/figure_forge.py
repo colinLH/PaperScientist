@@ -71,12 +71,17 @@ def _prepare_spec(store, sid, spec_path):
             raise ValueError('The manuscript contract does not authorize spanning figures')
         limits = dimensions(contract)
         width = limits['text_width_inches' if scope == 'page' else 'column_width_inches']
+        if spec.get('layout') == 'mechanism' and spec['type'] == 'framework' and 'size' not in spec:
+            spec['fit_height'] = True
         size = spec.setdefault('size', [round(width, 3), min(5.8, limits['max_figure_height_inches'])])
         if float(size[0]) > width + .015 or float(size[1]) > limits['max_figure_height_inches']:
             raise ValueError(f'Figure must be designed within {width:.3f} × {limits["max_figure_height_inches"]:.3f} inches. Reflow or split panels; do not shrink a wide diagram during inclusion.')
         layout_binding = {'manuscript': spec['manuscript'], 'scope': scope,
                           'target_width_inches': width, 'minimum_font_pt': contract['min_figure_font_pt'],
                           'contract_sha256': hashlib.sha256(_contract_path(manuscript).read_bytes()).hexdigest()}
+    if layout_binding and spec['type'] == 'framework' and (spec.get('layout') == 'mechanism'
+            or any(node.get('cells') for node in spec.get('nodes', []))):
+        spec['minimum_font_pt'] = max(layout_binding['minimum_font_pt'], float(spec.get('minimum_font_pt', 7)))
     return spec, layout_binding, hashlib.sha256(raw).hexdigest()
 
 

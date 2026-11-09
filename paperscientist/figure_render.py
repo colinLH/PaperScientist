@@ -322,6 +322,100 @@ def _profile_grid(fig, panel, rows):
                     ax.plot(loop, radial, linestyle=lines[k], **style)
 
 
+def _cell_grid(node):
+    """One header plus rectangular data cells. Accent coordinates use zero-based row, column."""
+    rows = node.get('cells', [])
+    if not isinstance(rows, list) or len(rows) > 12:
+        raise ValueError('cells must be a rectangular table of at most 12 rows')
+    if rows and (not isinstance(rows[0], list) or not 1 <= len(rows[0]) <= 10):
+        raise ValueError('A table requires 1–10 columns')
+    if any(not isinstance(row, list) or len(row) != len(rows[0])
+           or any(not isinstance(v, str) or '\n' in v for v in row) for row in rows):
+        raise ValueError('Each row in cells must contain the same number of single-line strings')
+    accents = node.get('accent_cells', [])
+    if not isinstance(accents, list):
+        raise ValueError('accent_cells must be a list of cell coordinates')
+    for pair in accents:
+        if (not isinstance(pair, list) or len(pair) != 2 or any(type(n) is not int for n in pair)
+                or not 0 <= pair[0] < len(rows) or not 0 <= pair[1] < len(rows[0])):
+            raise ValueError('accent_cells coordinate outside table')
+    return rows, {tuple(pair) for pair in accents}
+
+
+def _mechanism_layout(fig, nodes, groups, font):
+    """Position ordered stages and same-row branches at a scale close to physical points."""
+    if not groups:
+        raise ValueError('mechanism layout requires at least one stage in groups')
+    by_group = {g['id']: {} for g in groups}
+    for node in nodes:
+        if node.get('group') not in by_group:
+            raise ValueError('Every mechanism node must refer to an existing group')
+        rows = by_group[node['group']]
+        index = node.get('row', max(rows, default=-1) + 1)
+        if type(index) is not int or index < 0:
+            raise ValueError('row must be a nonnegative integer')
+        rows.setdefault(index, []).append(node)
+    col_gap, branch_gap, inset = 12, 9, 5
+    total_width = fig.get_figwidth() * 72 - 14
+    col_width = (total_width - (len(groups)-1) * col_gap) / len(groups)
+    row_height = font * 1.70
+    stages, placed = [], []
+    for i, g in enumerate(groups):
+        x = i * (col_width + col_gap)
+        y = font * 2.4
+        rows = by_group[g['id']]
+        if not rows:
+            raise ValueError('Every mechanism group needs a node')
+        for _, peers in sorted(rows.items()):
+            width = (col_width - 2 * inset - (len(peers)-1)*branch_gap)/len(peers)
+            if width <= font * 3:
+                raise ValueError('Too many nodes in one branch row at this figure width')
+            heights = []
+            for j, node in enumerate(peers):
+                cells, _ = _cell_grid(node)
+                lines = _wrap_label(fig, node.get('label',''), width - 8, font, 'bold').count('\n') + 1
+                if cells and lines > 1:
+                    raise ValueError(f"Shorten table title in node {node['id']}")
+                height = (len(cells) + lines) * row_height + (0 if cells else 3)
+                placed.append({**node, 'x':x+inset+j*(width+branch_gap), 'y':y,
+                               'width':width,'height':height,'palette':node.get('palette',g.get('palette',i))})
+                heights.append(height)
+            y += max(heights) + branch_gap
+        stages.append({**g,'x':x,'y':0,'width':col_width,'height':y-branch_gap+inset,
+                       'palette':g.get('palette',i)})
+    return placed, stages
+
+
+def _framework_table(fig, ax, item, ident, root, scale, font):
+    from matplotlib.patches import Rectangle
+
+    rows, accents = _cell_grid(item)
+    x, y, w, h = (item[k] for k in ('x','y','width','height'))
+    rh = h/(len(rows)+1)
+    palette = int(item.get('palette',0)) % len(COLORS)
+    for row_no, values in enumerate([[item.get('label','')], *rows]):
+        cw = w/len(values)
+        for col, value in enumerate(values):
+            left, top = x+cw*col, y+rh*row_no
+            header = row_no == 0
+            accent = (row_no-1,col) in accents
+            fill = FILLS[palette] if header or accent else 'white'
+            border = COLORS[palette] if accent else '#a6b4bd'
+            weight = 'bold' if header or accent else 'normal'
+            ax.add_patch(Rectangle((left,top),cw,rh,facecolor=fill,edgecolor=border,linewidth=.65,zorder=3))
+            text = ax.text(left+cw/2,top+rh/2,value,va='center',ha='center',fontsize=font,weight=weight,
+                           parse_math=False, zorder=4,color=INK)
+            p0, p1 = ax.transData.transform([(left,top),(left+cw,top+rh)])
+            box = text.get_window_extent(fig.canvas.get_renderer())
+            if box.width+2 > abs(p1[0]-p0[0]) or box.height+1 > abs(p1[1]-p0[1]):
+                raise ValueError(f"Cell text does not fit node {item['id']} at final size: {value!r}")
+            drawio_font = font * cw * scale / ((p1[0]-p0[0])*72/fig.dpi)
+            cell = ET.SubElement(root,'mxCell',id=f'cell:{ident}:{row_no}:{col}',parent=ident,vertex='1',value=value,
+                    style=f'html=0;whiteSpace=wrap;fillColor={fill};strokeColor={border};fontSize={drawio_font:.2f};fontStyle={int(weight=="bold")};')
+            ET.SubElement(cell,'mxGeometry',x=str(cw*col*scale),y=str(rh*row_no*scale),
+                          width=str(cw*scale),height=str(rh*scale),attrib={'as':'geometry'})
+
+
 def _framework(fig, spec, target):
     from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
     nodes, groups, edges = spec['nodes'], spec.get('groups', []), spec.get('edges', [])
@@ -330,8 +424,22 @@ def _framework(fig, spec, target):
     ids = {str(n['id']): n for n in nodes}
     if len({str(g['id']) for g in groups}) != len(groups) or len(ids) != len(nodes) or any(str(e[k]) not in ids for e in edges for k in ('source','target')):
         raise ValueError('Duplicate node IDs or dangling framework edge')
+    compact = spec.get('layout') == 'mechanism'
+    structured = compact or any('cells' in node for node in nodes)
+    font = max(7.5, _number(spec.get('minimum_font_pt', 7))) if structured else 7.5
+    if compact:
+        nodes, groups = _mechanism_layout(fig, nodes, groups, font)
+        ids = {str(n['id']): n for n in nodes}
+        if 'size' not in spec or spec.get('fit_height'):
+            label_height = sum(t.get_window_extent().height*72/fig.dpi + 2 for t in fig.texts)
+            natural = (max(g['height'] for g in groups) + 14 + label_height)/72
+            # A contract-provided size bounds the drawing, even when its height is implicit.
+            height_limit = fig.get_figheight() if 'size' in spec else 16
+            fig.set_figheight(max(.75, min(height_limit, natural)))
+    scale = 4/3 if compact else 10
+    tables = []
     ax = fig.add_subplot(111)
-    ax.set_aspect('equal'); ax.axis('off')
+    ax.set_aspect('equal', anchor='N' if compact else 'C'); ax.axis('off')
     doc = ET.Element('mxfile', host='PaperScientist')
     root = ET.SubElement(ET.SubElement(ET.SubElement(doc, 'diagram', name=spec.get('title','Framework')),'mxGraphModel'),'root')
     ET.SubElement(root,'mxCell',id='0');ET.SubElement(root,'mxCell',id='1',parent='0')
@@ -347,7 +455,7 @@ def _framework(fig, spec, target):
         color_idx = int(item.get('palette',0)) % len(COLORS)
         fill, color = '#f0f3f5', '#80919d'
         if is_group:
-            fill, color = '#fafbfc', '#bcc7ce'
+            fill, color = '#fafbfc', COLORS[color_idx] if compact else '#bcc7ce'
         elif item.get('contribution') or 'palette' in item:
             fill, color = FILLS[color_idx], COLORS[color_idx]
         label = str(item.get('label',''))
@@ -356,11 +464,15 @@ def _framework(fig, spec, target):
         ax.add_patch(FancyBboxPatch((x,y),w,h,boxstyle='round,pad=0,rounding_size=.7',
                                    linewidth=line_width,edgecolor=color,facecolor=fill,
                                    linestyle='--' if is_group else '-',zorder=0 if is_group else 3))
-        labels.append((x,y,w,h,label,is_group,weight))
         ident = ('g' if is_group else 'n')+str(item['id'])
-        cell = ET.SubElement(root,'mxCell',id=ident,parent='1',vertex='1',value=label,
-                             style=f'rounded=1;whiteSpace=wrap;html=0;fillColor={fill};strokeColor={color};strokeWidth={line_width};fontSize=13;fontStyle={int(weight=="bold")};'+('dashed=1;verticalAlign=top;align=left;' if is_group else ''))
-        ET.SubElement(cell,'mxGeometry',x=str(x*10),y=str(y*10),width=str(w*10),height=str(h*10),attrib={'as':'geometry'})
+        grid = [] if is_group else _cell_grid(item)[0]
+        if grid:
+            tables.append(({**item, 'x':x,'y':y,'width':w,'height':h},ident))
+        else:
+            labels.append((x,y,w,h,label,is_group,weight))
+        cell = ET.SubElement(root,'mxCell',id=ident,parent='1',vertex='1',value='' if grid else label,
+                             style=f'rounded=1;whiteSpace=wrap;html=0;fillColor={fill};strokeColor={color};strokeWidth={line_width};fontSize={font*4/3 if compact else 13:g};fontStyle={int(weight=="bold")};'+('dashed=1;verticalAlign=top;align=left;' if is_group else ''))
+        ET.SubElement(cell,'mxGeometry',x=str(x*scale),y=str(y*scale),width=str(w*scale),height=str(h*scale),attrib={'as':'geometry'})
     for i,e in enumerate(edges):
         a,b = ids[str(e['source'])],ids[str(e['target'])]
         ax0,ay0,bx,by = (float(a['x']),float(a['y']),float(b['x']),float(b['y']))
@@ -387,7 +499,7 @@ def _framework(fig, spec, target):
         ax.add_patch(arrow)
         if e.get('label'):
             lx,ly=map(_number,e.get('label_at',[(start[0]+end[0])/2,(start[1]+end[1])/2-1]))
-            ax.text(lx,ly,str(e['label']),fontsize=7,
+            ax.text(lx,ly,str(e['label']),fontsize=font if structured else 7,
                     ha='center',color='#38596b',bbox={'facecolor':'white','edgecolor':'none','pad':1},zorder=5)
         ports={'west':(0,.5),'east':(1,.5),'north':(.5,0),'south':(.5,1)}
         style='edgeStyle=orthogonalEdgeStyle;endArrow=block;html=0;'+('dashed=1;' if e.get('feedback') else '')
@@ -398,18 +510,26 @@ def _framework(fig, spec, target):
         geom=ET.SubElement(cell,'mxGeometry',relative='1',attrib={'as':'geometry'})
         if waypoints:
             points=ET.SubElement(geom,'Array',attrib={'as':'points'})
-            for x,y in waypoints:ET.SubElement(points,'mxPoint',x=str(x*10),y=str(y*10))
+            for x,y in waypoints:ET.SubElement(points,'mxPoint',x=str(x*scale),y=str(y*scale))
     ax.set_xlim(min(x for x,y in bounds)-2,max(x for x,y in bounds)+2)
     ax.set_ylim(max(y for x,y in bounds)+2,min(y for x,y in bounds)-2)
     fig.canvas.draw()
     for x,y,w,h,label,is_group,weight in labels:
         left, right = ax.transData.transform([(x,y),(x+w,y)])
         width_pt = max(1, (right[0] - left[0]) * 72 / fig.dpi - 7)
-        fontsize = 9 if is_group else 8.5
+        fontsize = (max(font,8) if is_group else font) if compact else max(font if structured else 0, 9 if is_group else 8.5)
         wrapped = _wrap_label(fig, label, width_pt, fontsize, weight)
-        ax.text(x+1.3 if is_group else x+w/2,y+1.2 if is_group else y+h/2,wrapped,
+        artist = ax.text(x+1.3 if is_group else x+w/2,y+1.2 if is_group else y+h/2,wrapped,
                 fontsize=fontsize,weight=weight,ha='left' if is_group else 'center',
                 va='top' if is_group else 'center',color=INK,zorder=4)
+        if compact:
+            box = artist.get_window_extent(fig.canvas.get_renderer())
+            height = h if not is_group else font*2.2
+            p0, p1 = ax.transData.transform([(x,y),(x+w,y+height)])
+            if box.width+1 > abs(p1[0]-p0[0]) or box.height+1 > abs(p1[1]-p0[1]):
+                raise ValueError(f'Shorten framework label at final size: {label!r}')
+    for item, ident in tables:
+        _framework_table(fig, ax, item, ident, root, scale, font)
     ET.ElementTree(doc).write(target/'figure.drawio',encoding='utf-8',xml_declaration=True)
 
 
@@ -432,8 +552,9 @@ def render_document(spec, base, target):
     cols = min(len(panels) or 1, 3, max(1, int(spec.get('columns', 2 if width >= 6 else 1))))
     default_height = 2.4 * math.ceil(len(panels) / cols) + .75 if panels else 3.8
     width,height=map(_number,spec.get('size',[default_width,default_height]))
-    if not 3<=width<=20 or not 2<=height<=16:
-        raise ValueError('Figure size must fit 3–20 × 2–16 inches')
+    min_height = .75 if spec['type']=='framework' and spec.get('layout')=='mechanism' else 2
+    if not 3<=width<=20 or not min_height<=height<=16:
+        raise ValueError(f'Figure size must fit 3–20 × {min_height:g}–16 inches')
     target.mkdir(parents=True,exist_ok=True)
     style={'font.family':fonts,'font.size':9,'axes.titlesize':10,'text.color':INK,
            'axes.labelsize':9,'axes.labelcolor':INK,'axes.edgecolor':'#80919d','axes.linewidth':.7,
@@ -443,12 +564,14 @@ def render_document(spec, base, target):
         fig=plt.figure(figsize=(width,height),layout='constrained')
         try:
             text_width = width * 72 - 16
+            min_font = _number(spec.get('minimum_font_pt', 7)) if spec['type']=='framework' else 7
+            title_font, caption_font = max(11,min_font), max(8,min_font)
             if spec.get('title'):
-                fig.suptitle(_wrap_label(fig,spec['title'],text_width,11,'bold'),
-                             x=.02,ha='left',fontsize=11,weight='bold')
+                fig.suptitle(_wrap_label(fig,spec['title'],text_width,title_font,'bold'),
+                             x=.02,ha='left',fontsize=title_font,weight='bold')
             if spec.get('caption'):
-                fig.supxlabel(_wrap_label(fig,spec['caption'],text_width,8),
-                              x=.02,ha='left',fontsize=8,color='#495963')
+                fig.supxlabel(_wrap_label(fig,spec['caption'],text_width,caption_font),
+                              x=.02,ha='left',fontsize=caption_font,color='#495963')
             if spec['type']=='framework':
                 _framework(fig,spec,target)
             elif spec['type']=='results' and profile_panels:

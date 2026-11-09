@@ -316,8 +316,9 @@ profiles:
     description: Evidence-grounded manuscript writing, polishing and layout validation
     prompt: Develop introduction, background, example-driven motivation and challenges, an overall architecture,
       contribution-linked design details, evaluation setup/questions/results and limitations. Preserve evidence
-      when polishing. Validate the selected column layout, figure sizes and final PDF before declaring the manuscript
-      ready.
+      when polishing. For a method figure, trace one real data item across compact stages with the relevant
+      fields, operators and decision branches. Use small symbols to identify objects. Validate the selected
+      column layout, figure sizes and final PDF before declaring the manuscript ready.
     tools:
     - assemble_manuscript
     - audit_benchmarks

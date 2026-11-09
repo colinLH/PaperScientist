@@ -44,7 +44,31 @@ For repeated measurements on a **common scale and direction**, one `radar_grid` 
 
 Report the actual sample size, case unit and per-axis denominators in the specification and caption. Keep paired cases together across working points. Optional `row_order`, `column_order` and `series_order` can retain planned levels with no observations. Absent cells and blank numeric values remain unmeasured. Incomplete profiles show only recorded points; zero is an observed value. Duplicate estimates, out-of-scale values, error bars and implicit aggregation are rejected. Keep labels short. Use 3–12 spokes, at most 4 overlaid series, and up to 5 rows by 4 columns, reducing the grid when the publication width requires it.
 
-## Framework / motivating example
+## Compact mechanism diagram
+
+For a technical method overview, choose `type: "framework", layout: "mechanism"`. Give each stage a named group. Put the entities and operations in `nodes`, and put real record fields or transformation details in the relevant node's `cells` table. Each pair in `accent_cells` selects one zero-based [row, column] in that table. Node order sets the rows within each group. Give two nodes the same explicit `row` to put alternatives side by side. An edge is a scientific assertion, so give alternative inputs their conditions and use directed links only where one step supplies or controls the next.
+
+```json
+{
+  "type": "framework", "layout": "mechanism", "size": [7.1,2.15],
+  "groups": [{"id":"in","label":"a   Read the message"},{"id":"parse","label":"b   Preserve provenance","palette":2},{"id":"send","label":"c   Check the recipient","palette":1}],
+  "nodes": [
+    {"group":"in","id":"mail","label":"Message fields","cells":[["Header","Bob"],["Body","Use Eve"],["Source","Inbox"]],"accent_cells":[[1,1]]},
+    {"group":"in","id":"return","label":"Untrusted tool return"},
+    {"group":"parse","id":"extract","label":"Typed extraction","cells":[["Input","mail"],["Output","addr"],["Type","EmailStr"]],"accent_cells":[[1,1]]},
+    {"group":"parse","id":"lineage","label":"addr depends on mail"},
+    {"group":"send","id":"policy","label":"send_email(addr)","cells":[["Source","Decision"],["Mail","Hold"],["User¹","Allow"]],"accent_cells":[[1,1]]},
+    {"group":"send","id":"hold","row":1,"label":"Held"},
+    {"group":"send","id":"allow","row":1,"label":"Eligible¹"}
+  ],
+  "edges":[{"source":"mail","target":"extract"},{"source":"extract","target":"policy"},{"source":"mail","target":"return"},{"source":"extract","target":"lineage"},{"source":"policy","target":"hold","source_side":"south","target_side":"north"},{"source":"policy","target":"allow","source_side":"south","target_side":"north"}],
+  "caption":"¹ Alternative user-supplied address; remaining checks pass. The mail-derived address follows Hold."
+}
+```
+
+At final manuscript width, trace the mail-derived address to the hold branch. The alternate user-supplied address is eligible only when the remaining checks pass. Use small glyphs beside short labels if a reader needs help identifying an object. Use rows, field values and branch outcomes for the interior of each stage. Split an overcrowded mechanism into linked subfigures while retaining the manuscript column widths and readable type.
+
+## Coordinate-based framework
 
 ```json
 {
@@ -75,9 +99,9 @@ Coordinates are consistent abstract units, y increases downward. Node IDs are un
 
 The `prompt` is sent to the configured MicuAPI service. Omit private session material and credentials. Add `manuscript` and `figure_scope` for a layout-bound export. The output contains `figure.png` and a `figure.pdf` with the specified physical page size, plus the spec and generation record. Keep the PNG for exact reuse. Compare labels, count, arrow direction and the depicted mechanism against the source method before inclusion. Use a results spec and source CSV for plots with measured axes, counts or uncertainty.
 
-## Modular method figures with GPT Image
+## Panels with independently generated artwork
 
-Use `type: "framework_plate"` to storyboard 2–6 neighboring panels. Each panel uses either its own standalone `prompt` (one MicuAPI generation) or an existing session-workspace raster `asset` (offline). Give it a unique ID and a short title. Include a local paper/section locator in `source` to keep the scientific basis alongside the spec. Only the panel prompt is transmitted. Plan any editable labels and their empty space together. Coordinates for labels and for the optional zoom window are normalized to the source image, measured from the top left. The tool draws a dashed crop boundary and puts the actual enlarged region in a separate strip. Two neighbors in `links` get a vector arrow in the gutter; independent panels can omit links.
+Use `type: "framework_plate"` to storyboard 2–6 neighboring panels when the image content itself matters. Each panel uses either its own standalone `prompt` (one MicuAPI generation) or an existing session-workspace raster `asset` (offline). Give it a unique ID and a short title. Include a local paper/section locator in `source` to keep the scientific basis alongside the spec. Only the panel prompt is transmitted. Plan any editable labels and their empty space together. Coordinates for labels and for the optional zoom window are normalized to the source image, measured from the top left. The tool draws a dashed crop boundary and puts the actual enlarged region in a separate strip. Two neighbors in `links` get a vector arrow in the gutter; independent panels can omit links.
 
 ```json
 {
