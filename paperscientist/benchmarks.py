@@ -200,6 +200,15 @@ def _dataset(store, sid, path):
     return result
 
 
+def _case_groups(cases, ids, facets):
+    """Group selected cases by the frozen index, never by evaluator output."""
+    groups = {}
+    for cid in ids:
+        labels = tuple(_text(cases[cid].get(field), f"case {cid}: facet {field}") for field in facets)
+        groups.setdefault(labels, []).append(cid)
+    return groups
+
+
 def plan_benchmark(store, sid, benchmark_id: str, protocol: dict | None = None, protocol_path: str = ""):
     """Freeze applicability and a local protocol before running any evaluation."""
     if protocol_path:
@@ -263,6 +272,19 @@ def plan_benchmark(store, sid, benchmark_id: str, protocol: dict | None = None, 
         raise ValueError("seeds must be integers")
     if set(plan["metrics"]) - set(manifest["metrics"]):
         raise ValueError("Protocol metrics must be defined by the manifest")
+    facets = plan.get("case_facets", [])
+    if not isinstance(facets, list) or not all(isinstance(f, str) and f.strip() for f in facets) or len(set(facets)) != len(facets):
+        raise ValueError("case_facets must be a list of distinct categorical fields from the dataset index")
+    baselines = plan.get("paired_baselines", {})
+    if not isinstance(baselines, dict) or any(
+        name not in plan["methods"] or reference not in plan["methods"] or reference == name
+        for name, reference in baselines.items()
+    ):
+        raise ValueError("paired_baselines must map each compared method to a distinct registered method")
+    if facets or baselines:
+        groups = _case_groups(cases, ids, facets)
+        if len(groups) * len(plan["methods"]) * len(plan["metrics"]) > 10000:
+            raise ValueError("Grouped summary exceeds 10000 metric cells; use research-relevant categories rather than case identifiers")
     budget = plan.get("budget", {})
     if type(budget.get("timeout_seconds")) is not int or not 1 <= budget["timeout_seconds"] <= 300:
         raise ValueError("budget.timeout_seconds must be 1–300 (enforced by the local runner)")
@@ -310,6 +332,11 @@ def _validate_revision(store, sid, plan):
         for field in ("case_ids", "methods", "seeds", "metrics"):
             if not set(old[field]).issubset(plan[field]):
                 raise ValueError(f"Revision cannot drop {field}")
+        if old.get("case_facets") and old["case_facets"] != plan.get("case_facets"):
+            raise ValueError("Changing the registered case facets requires a separate evaluation")
+        for method, reference in old.get("paired_baselines", {}).items():
+            if plan.get("paired_baselines", {}).get(method) != reference:
+                raise ValueError("Revision cannot drop or replace a registered paired baseline")
         if old["scope"] == "full_split" and plan["scope"] != "full_split":
             raise ValueError("Revision cannot reduce full_split scope")
 
@@ -375,6 +402,51 @@ def _number(value, label):
     return float(value)
 
 
+def _aggregate(series, metric, denominator):
+    if not denominator:
+        return None
+    value = math.fsum(item / denominator for item in series)
+    return math.sqrt(value) if metric == "rmse" else value
+
+
+def _grouped_scores(plan, cases, trials):
+    facets = plan.get("case_facets", [])
+    groups = _case_groups(cases, plan["case_ids"], facets)
+    cells = []
+    for labels, ids in groups.items():
+        units = list(itertools.product(ids, plan["seeds"]))
+        for method in plan["methods"]:
+            baseline = plan.get("paired_baselines", {}).get(method)
+            observed, paired, reference, paired_cases = [], [], [], set()
+            counts = {"ok": 0, "error": 0, "timeout": 0, "missing": 0}
+            for cid, seed in units:
+                status, scores = trials.get((cid, method, seed), ("missing", {}))
+                counts[status] += 1
+                if status != "ok":
+                    continue
+                observed.append(scores)
+                other_status, other_scores = trials.get((cid, baseline, seed), ("missing", {}))
+                if other_status == "ok":
+                    paired.append(scores)
+                    reference.append(other_scores)
+                    paired_cases.add(cid)
+            cell = {"facets": dict(zip(facets, labels)), "method": method, "planned_cases": len(ids),
+                    "planned_rows": len(units), "status_counts": counts, "metrics": {}}
+            if baseline:
+                cell.update(baseline=baseline, paired_cases=len(paired_cases), paired_rows=len(paired))
+            for metric in plan["metrics"]:
+                score = {"observed_value": _aggregate((r[metric] for r in observed), metric, len(observed))}
+                if baseline:
+                    paired_value = _aggregate((r[metric] for r in paired), metric, len(paired))
+                    baseline_value = _aggregate((r[metric] for r in reference), metric, len(paired))
+                    score.update(paired_value=paired_value, paired_baseline_value=baseline_value,
+                                 paired_difference=paired_value - baseline_value if paired else None)
+                cell["metrics"][metric] = score
+            cells.append(cell)
+    return {"case_facets": facets, "cells": cells,
+            "interpretation": "Observed values use each method's successful rows. Plot paired_value and paired_baseline_value from the same cell for matched comparisons. Both use the same successful case/seed pairs as paired_difference. Null means no observations. Combinations absent from the case index are unplanned."}
+
+
 def _evaluate(store, sid, plan, result_path):
     rows = _json(store.file(sid, result_path))
     if not isinstance(rows, list):
@@ -382,6 +454,8 @@ def _evaluate(store, sid, plan, result_path):
     expected = set(itertools.product(plan["case_ids"], plan["methods"], plan["seeds"]))
     cases = _dataset(store, sid, plan["dataset_path"])
     seen, values, failed = set(), {}, []
+    grouped = plan.get("case_facets") or plan.get("paired_baselines")
+    trials = {}
     for row in rows:
         if not isinstance(row, dict) or type(row.get("seed")) is not int:
             raise ValueError("Each result must contain a case ID, method and integer seed")
@@ -393,6 +467,9 @@ def _evaluate(store, sid, plan, result_path):
             raise ValueError("Result status must be ok, error or timeout")
         if row["status"] != "ok":
             failed.append({"case_id": key[0], "method": key[1], "seed": key[2], "status": row["status"]})
+        if grouped:
+            trial_scores = {}
+            trials[key] = (row["status"], trial_scores)
         for metric in plan["metrics"]:
             bucket = values.setdefault((key[1], metric), [])
             if row["status"] != "ok":
@@ -416,6 +493,8 @@ def _evaluate(store, sid, plan, result_path):
             if not math.isfinite(value):
                 raise ValueError("Metric calculation overflowed; use a numerically stable official evaluator")
             bucket.append(value)
+            if grouped:
+                trial_scores[metric] = value
     missing = sorted(expected - seen)
     denominator = len(plan["case_ids"]) * len(plan["seeds"])
     scores = {}
@@ -424,12 +503,11 @@ def _evaluate(store, sid, plan, result_path):
         for metric in plan["metrics"]:
             series = values.get((method, metric), [])
             divisor = denominator if metric in {"pass_rate", "accuracy", "exact_match"} else len(series)
-            value = math.fsum(item / divisor for item in series) if divisor else None
-            if metric == "rmse" and value is not None:
-                value = math.sqrt(value)
+            value = _aggregate(series, metric, divisor)
             scores[method][metric] = {"value": value, "scored_rows": len(series), "planned_rows": denominator,
                                       "missing_and_errors_as_zero": metric in {"pass_rate", "accuracy", "exact_match"}}
-    return {"expected": len(expected), "observed": len(seen), "coverage": len(seen) / len(expected),
+    breakdown = {"grouped_scores": _grouped_scores(plan, cases, trials)} if grouped else {}
+    return {**breakdown, "expected": len(expected), "observed": len(seen), "coverage": len(seen) / len(expected),
             "missing": [dict(zip(("case_id", "method", "seed"), key)) for key in missing], "failed": failed,
             "scores": scores, "protocol_complete": not missing and not failed,
             "official_benchmark_complete": False,

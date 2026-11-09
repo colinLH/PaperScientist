@@ -430,7 +430,7 @@ class ToolSet:
 
         @tool
         def plan_benchmark(benchmark_id: str, protocol: dict | None = None, protocol_path: str = "") -> dict:
-            """Freeze a protocol BEFORE evaluation. Supply either the protocol object or protocol_path to a saved JSON object (use files for large case lists). Same validation and hashes apply; the source file is also frozen. Load benchmark-evaluation for the schema."""
+            """Freeze a protocol BEFORE evaluation. Supply protocol or a saved protocol_path. For subgroup or before/after questions, register case_facets from the dataset index and paired_baselines between methods to obtain audited per-cell coverage and differences. Load benchmark-evaluation for the schema."""
             from . import benchmarks
             return benchmarks.plan_benchmark(store, sid, benchmark_id, protocol, protocol_path)
 

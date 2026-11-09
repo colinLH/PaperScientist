@@ -97,6 +97,43 @@ Path("results.json").write_text(json.dumps(rows), encoding="utf-8")
         custom = discover_benchmarks("marine acoustics classification", self.store, self.sid)
         self.assertEqual(custom["candidates"][0]["id"], "custom-domain")
 
+    async def test_group_coverage_paired_differences_and_empty_cells_survive_audit(self):
+        cases = [{"case_id": str(i), "split": "test", "target": i % 2, "suite": "mail",
+                  "category": "A" if i < 2 else "B"} for i in range(6)]
+        self.write("cases.json", cases)
+        self.fixed_rows([
+            {"case_id": "0", "method": "parity", "seed": 0, "status": "ok", "prediction": 0},
+            {"case_id": "0", "method": "always-one", "seed": 0, "status": "ok", "prediction": 1},
+            {"case_id": "1", "method": "parity", "seed": 0, "status": "ok", "prediction": 0},
+            {"case_id": "1", "method": "always-one", "seed": 0, "status": "timeout"},
+            {"case_id": "0", "method": "parity", "seed": 1, "status": "error"},
+            {"case_id": "0", "method": "always-one", "seed": 1, "status": "ok", "prediction": 0},
+        ])
+        plan = self.plan(case_facets=["suite", "category"], paired_baselines={"parity": "always-one"})
+        result = await run_benchmark(self.store, self.sid, plan["plan_id"], True)
+        cells = result["summary"]["grouped_scores"]["cells"]
+        indexed = {(c["facets"]["category"], c["method"]): c for c in cells}
+        subset = indexed["A", "parity"]
+        self.assertEqual(subset["status_counts"], {"ok": 2, "error": 1, "timeout": 0, "missing": 1})
+        self.assertEqual((subset["planned_cases"], subset["planned_rows"]), (2, 4))
+        self.assertEqual((subset["paired_cases"], subset["paired_rows"]), (1, 1))
+        self.assertEqual(subset["metrics"]["accuracy"], {"observed_value": 0.5, "paired_value": 1.0,
+                                                        "paired_baseline_value": 0.0, "paired_difference": 1.0})
+        self.assertEqual(indexed["A", "always-one"]["metrics"]["accuracy"]["observed_value"], 0.5)
+        self.assertEqual(indexed["B", "parity"]["metrics"]["accuracy"],
+                         dict(observed_value=None, paired_value=None, paired_baseline_value=None, paired_difference=None))
+        self.assertEqual(indexed["B", "parity"]["status_counts"]["missing"], 8)
+        self.assertFalse(result["summary"]["protocol_complete"])
+        restored = audit_benchmarks(Store(Path(self.temp.name)), self.sid)
+        self.assertEqual(restored["results"][0]["grouped_scores"]["cells"], cells)
+
+    def test_comparisons_must_reference_frozen_case_fields_and_methods(self):
+        for invalid in ({"case_facets": ["absent"]}, {"case_facets": ["split", "split"]},
+                        {"paired_baselines": {"parity": "unregistered"}},
+                        {"paired_baselines": {"parity": "parity"}}):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                self.plan(**invalid)
+
     async def test_revision_preserves_failed_history_and_requires_fresh_complete_run(self):
         old = self.plan(case_ids=["0", "1"])
         with self.assertRaises(ValueError):

@@ -82,6 +82,24 @@ Each `(case_id, method, seed)` occurs once. `status` is `ok`, `error` or `timeou
 
 `audit_benchmarks()` independently recomputes coverage and summary metrics. `protocol_complete` means every planned evaluation has a valid row and no evaluator errors; a zero success rate can still be a complete evaluation. `official_benchmark_complete` stays false because this generic harness cannot certify the semantic validity of a grader, official inventory, leakage controls or leaderboard compliance. Report the actual protocol scope and link evidence rather than promising an official score certification.
 
+## Optional subgroup and paired comparisons
+
+Add `case_facets` to the protocol when the hypothesis concerns specific groups, and annotate every selected case in the frozen index with a nonempty string for each field. Add `paired_baselines` to compare methods measured on the same inputs. The keys and values must be distinct members of the registered `methods` list. Both fields are optional and can be used independently.
+
+```json
+{
+  "methods": ["model-A/base", "model-A/defended", "model-B/base", "model-B/defended"],
+  "case_facets": ["tool_environment", "attack_family"],
+  "paired_baselines": {"model-A/defended": "model-A/base", "model-B/defended": "model-B/base"}
+}
+```
+
+For each selected case, classify the environment and attack family before scoring. In other domains use dimensions appropriate to the research question. Keep clean controls in an explicit category when applicable. Numeric outcomes belong in the registered metrics. Retain raw per-case outputs and case identifiers for each method and seed.
+
+`run_benchmark` and `audit_benchmarks` return `grouped_scores` in their result summaries. Each cell lists its method, facet labels, planned unique cases and case/seed rows, and counts by status. `metrics[metric].observed_value` uses each method’s successful rows, which can differ between methods. For paired profiles, plot `paired_value` against `paired_baseline_value` from the **same method cell**. Both estimates and their `paired_difference` use exactly the successful case/seed pairs shared by that comparison. The report includes both paired rows and unique paired cases. All three paired metrics are null if the comparison has no shared successful rows. Negative differences favor the compared method for lower-is-better errors. A missing estimate is JSON null. Render an unavailable marker for missing evidence and show denominators wherever coverage differs. Only combinations present in the selected index are planned. The ordinary protocol-wide `scores` retain their registered failure/denominator conventions.
+
+Repeated seeds on one case do not add independent cases. For a sampled population, preregister how to quantify uncertainty (for example a case-clustered paired bootstrap); for a fixed census, report the observed differences and coverage. If a meaningful contrast is undercovered, collect additional runs within the original budget or register an exposed follow-up. Preserve historical runs when a protocol is revised.
+
 ## Corrections and prior exposure
 
 Correct an erroneous selected protocol by registering a new selected protocol with

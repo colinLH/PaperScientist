@@ -38,7 +38,8 @@ async def main(output, collect=False):
         "splits": ["test"], "metrics": {"accuracy": "Exact label match / planned evaluations"},
     })
     store.file(sid, "cases.json").write_text(json.dumps([
-        {"case_id": str(i), "split": "test", "x": i, "target": i % 2} for i in range(6)
+        {"case_id": str(i), "split": "test", "x": i, "target": i % 2,
+         "input_band": "0–2" if i < 3 else "3–5"} for i in range(6)
     ]), encoding="utf-8")
     store.file(sid, "evaluate.py").write_text('''import json
 from pathlib import Path
@@ -56,6 +57,7 @@ Path("results.json").write_text(json.dumps(rows), encoding="utf-8")
         "claim": "No scientific benchmark performance claim", "task_match": "Synthetic adapter plumbing check",
         "scope": "smoke", "split": "test", "case_ids": [str(i) for i in range(6)],
         "methods": ["parity", "always-one"], "seeds": [0, 1], "metrics": ["accuracy"],
+        "case_facets": ["input_band"], "paired_baselines": {"parity": "always-one"},
         "adapter": "local_python", "script_path": "evaluate.py", "dataset_path": "cases.json", "result_path": "results.json",
         "evaluator_description": "Reviewed deterministic parity arithmetic script, local CPU",
         "limitations": "Six synthetic cases only; no external suite, model inference or scientific-agent score",

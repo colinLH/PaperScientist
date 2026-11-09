@@ -242,8 +242,10 @@ profiles:
   evaluation:
     description: Benchmark selection, experiments, statistical evaluation and figures
     prompt: Select relevant public benchmarks, verify access and license and fit to hypotheses, plan baselines/ablations
-      and uncertainty, run only permitted experiments, preserve raw results and failure cases, and map each conclusion
-      to measured evidence.
+      and uncertainty. Before collecting results, design comparisons around the claim. Register relevant case_facets
+      and paired_baselines in plan_benchmark, with matched case IDs and seeds. Check coverage, failures and gaps
+      at the cell level. If evidence is sparse, run a justified additional evaluation within budget or report
+      the gap. Preserve raw outputs and map each conclusion to measured evidence.
     tools:
     - audit_benchmarks
     - audit_research
