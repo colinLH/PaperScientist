@@ -326,7 +326,7 @@ class ToolSet:
 
         @tool
         async def figure_forge(spec_path: str, brief: str) -> dict:
-            """Create a paper figure from a workspace JSON spec. Use results for CSV charts, framework for editable diagrams, or illustration for a conceptual PNG/PDF from MicuAPI. Only an illustration sends its standalone prompt to the configured provider. Load figure-forge for schema."""
+            """Create a paper figure from a workspace JSON spec. Use results for CSV charts, framework for editable diagrams, framework_plate for separately illustrated panels with editable labels and links, or illustration for a single concept. Only standalone image prompts go to MicuAPI. Load figure-forge for schema."""
             from .figure_forge import create_agent_figure
             return await create_agent_figure(store, sid, spec_path, brief, cfg, self.service.plot_lock)
 

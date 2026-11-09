@@ -55,8 +55,8 @@ def _prepare_spec(store, sid, spec_path):
         raise ValueError('Figure spec must be at most 500KB')
     raw = source.read_bytes()
     spec = json.loads(raw)
-    if spec.get('type') not in {'results','framework','illustration'}:
-        raise ValueError('Figure spec type must be results, framework or illustration; load figure-forge for examples')
+    if spec.get('type') not in {'results','framework','illustration','framework_plate'}:
+        raise ValueError('Figure spec type must be results, framework, framework_plate or illustration; load figure-forge for examples')
     layout_binding = None
     if spec.get('manuscript'):
         from .manuscript_layout import load_contract, dimensions, _contract_path
@@ -83,13 +83,20 @@ def _prepare_spec(store, sid, spec_path):
 def create_figure(store, sid, spec_path, brief):
     """Synchronous entry point for local vector figures."""
     spec, layout_binding, digest = _prepare_spec(store, sid, spec_path)
-    if spec['type'] == 'illustration':
+    if spec['type'] in {'illustration', 'framework_plate'}:
         raise ValueError('Use the configured figure_forge agent tool for image generation')
     return _create_vector(store, sid, spec, brief, layout_binding, digest)
 
 
 async def create_agent_figure(store, sid, spec_path, brief, settings, plot_lock):
     spec, layout_binding, digest = _prepare_spec(store, sid, spec_path)
+    if spec['type'] == 'framework_plate':
+        from . import micu_plates
+        folder, report = await micu_plates.create_plate(
+            store, sid, spec, settings, plot_lock, layout_binding, digest)
+        report['references'] = await asyncio.to_thread(search_references, brief)
+        return _register_bundle(store, sid, folder, report, layout_binding,
+                                'Inspect artwork, labels, joins and source relationships at final manuscript size.')
     if spec['type'] != 'illustration':
         async with plot_lock:
             return await asyncio.to_thread(_create_vector, store, sid, spec, brief, layout_binding, digest)

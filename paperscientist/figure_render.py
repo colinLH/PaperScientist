@@ -30,10 +30,12 @@ def _rows(base, panel):
         raise ValueError('CSV must be a bounded file inside the figure bundle')
     with path.open(encoding='utf-8-sig', newline='') as stream:
         rows = list(csv.DictReader(stream))
-    columns = [panel.get(k) for k in ('x', 'y', 'group', 'error') if panel.get(k)]
+    columns = [panel.get(k) for k in ('x', 'y', 'group', 'error', 'facet_row', 'facet_column') if panel.get(k)]
     if not rows or len(rows) > 100000 or any(c not in rows[0] for c in columns):
         raise ValueError('Empty/oversized CSV or missing columns')
     for row in rows:
+        if panel.get('kind') == 'radar_grid' and not row[panel['y']].strip():
+            continue
         _number(row[panel['y']])
         if panel.get('error') and _number(row[panel['error']]) < 0:
             raise ValueError('Error bars must be nonnegative')
@@ -212,6 +214,114 @@ def _panel(ax, panel, rows, index, series_styles, panel_width_pt, multiple):
     # No autosynthetic error bars, significance stars, favorable limits or hidden runs.
 
 
+def _profile_grid(fig, panel, rows):
+    """Compare paired profiles on identical spokes, scales and facets without imputing cells."""
+    import numpy as np
+    from matplotlib.lines import Line2D
+
+    fields = ('facet_row', 'facet_column', 'group', 'x', 'y')
+    if any(not panel.get(field) for field in fields):
+        raise ValueError('radar_grid needs facet_row, facet_column, group, x and y columns')
+    if panel.get('aggregate') or panel.get('error'):
+        raise ValueError('Use one precomputed estimate per spoke; put uncertainty in a separate panel')
+    row_key, column_key, group_key, dimension_key, value_key = (panel[field] for field in fields)
+    dimensions = panel.get('dimensions', [])
+    if not (isinstance(dimensions, list) and 3 <= len(dimensions) <= 12
+            and all(isinstance(item, str) and item.strip() for item in dimensions)
+            and len(set(dimensions)) == len(dimensions)):
+        raise ValueError('Declare 3–12 unique ordered dimension labels for a radar grid')
+    maximum = _number(panel.get('scale_max', 0))
+    if maximum <= 0 or not str(panel.get('unit', '')).strip():
+        raise ValueError('Declare a common positive scale_max and unit for all spokes')
+    def levels(key, order):
+        observed = list(dict.fromkeys(record[key] for record in rows))
+        declared = panel.get(order, observed)
+        if (not isinstance(declared, list)
+                or any(not isinstance(name, str) or not name.strip() for name in declared)
+                or len(set(declared)) != len(declared) or not set(observed).issubset(declared)):
+            raise ValueError(f'{order} must contain each observed label with no duplicates')
+        return declared
+
+    row_labels = levels(row_key, 'row_order')
+    column_labels = levels(column_key, 'column_order')
+    series = levels(group_key, 'series_order')
+    if len(row_labels) > 5 or len(column_labels) > 4 or len(series) > 4:
+        raise ValueError('Split radar grids larger than 5 rows, 4 columns or 4 series')
+    values = {}
+    for record in rows:
+        key = tuple(record[field] for field in (row_key, column_key, group_key, dimension_key))
+        if key in values or key[-1] not in dimensions:
+            raise ValueError('Duplicate profile cell or undeclared radar dimension')
+        raw = record[value_key].strip()
+        value = _number(raw) if raw else None
+        if value is not None and not 0 <= value <= maximum:
+            raise ValueError('Profile estimate outside declared 0–scale_max range')
+        values[key] = value
+    missing = (len(values) != len(row_labels)*len(column_labels)*len(series)*len(dimensions)
+               or None in values.values())
+    colors = ['#536475', '#bf4e29', '#00837a', '#7653a2']
+    lines = ['--', '-', '-.', ':']
+    markers = ['o', 'D', '^', 's']
+    ticks = np.linspace(maximum / 4, maximum, 4)
+    angles = np.arange(len(dimensions)) * 2 * np.pi / len(dimensions)
+    grid = fig.add_gridspec(len(row_labels)+2, len(column_labels)+1,
+                            width_ratios=[.10]+[1]*len(column_labels),
+                            height_ratios=[.23, .16]+[1]*len(row_labels))
+    legend_ax = fig.add_subplot(grid[0, :])
+    legend_ax.set_axis_off()
+    handles = [Line2D([], [], color=colors[k], linestyle=lines[k], marker=markers[k], lw=1.4,
+                      markerfacecolor='white' if k == 0 else colors[k], markersize=4, label=name)
+               for k, name in enumerate(series)]
+    legend_ax.legend(handles=handles, ncol=len(series), frameon=False, loc='center left',
+                     bbox_to_anchor=(0, .75), fontsize=8, borderaxespad=0)
+    scale_label = f"Scale  0–{maximum:g} {panel['unit']}   ·   Rings  " + ' / '.join(f'{t:g}' for t in ticks)
+    if missing:
+        scale_label += '   ·   Incomplete profiles show observed points only'
+    legend_ax.text(0, .05, _wrap_label(fig, scale_label, fig.get_figwidth()*72-18, 8),
+                   color=INK, va='center', fontsize=8)
+    for col, label in enumerate(column_labels):
+        header = fig.add_subplot(grid[1, col+1])
+        header.set_facecolor('#e8edf0')
+        header.set_xticks([])
+        header.set_yticks([])
+        header.spines[:].set_visible(False)
+        header.text(.5, .5, label, ha='center', va='center', weight='bold', fontsize=9)
+    for i, label in enumerate(row_labels):
+        side = fig.add_subplot(grid[i+2, 0])
+        side.set_facecolor('#e8edf0')
+        side.set_xticks([])
+        side.set_yticks([])
+        side.spines[:].set_visible(False)
+        side.text(.5, .5, label, rotation=90, ha='center', va='center', weight='bold', fontsize=8)
+        for j, column in enumerate(column_labels):
+            ax = fig.add_subplot(grid[i+2, j+1], projection='polar')
+            ax.set_theta_zero_location('N')
+            ax.set_theta_direction(-1)
+            ax.set_xticks(angles, dimensions, fontsize=8)
+            ax.tick_params(axis='x', pad=1)
+            ax.set_ylim(0, maximum)
+            ax.set_yticks(ticks, ['']*len(ticks))
+            ax.spines['polar'].set_edgecolor('#a2b1b9')
+            ax.grid(color='#c7cfd4', lw=.55)
+            ax.set_facecolor('#fbfcfc')
+            if all(values.get((label, column, name, d)) is None for name in series for d in dimensions):
+                ax.text(.5, .5, 'No observations', transform=ax.transAxes, ha='center', va='center',
+                        fontsize=8, bbox={'facecolor': 'white', 'edgecolor': 'none', 'pad': 2})
+            for k, name in enumerate(series):
+                points = [values.get((label, column, name, d)) for d in dimensions]
+                style = dict(color=colors[k], marker=markers[k], markersize=4 if k == 0 else 2.7,
+                             markerfacecolor='white' if k == 0 else colors[k], linewidth=1.25,
+                             clip_on=False)
+                if None in points:
+                    ax.plot(angles, [float('nan') if v is None else v for v in points],
+                            linestyle='none', **style)
+                else:
+                    loop = np.r_[angles, angles[0]]
+                    radial = [*points, points[0]]
+                    ax.fill(loop, radial, color=colors[k], alpha=.11)
+                    ax.plot(loop, radial, linestyle=lines[k], **style)
+
+
 def _framework(fig, spec, target):
     from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
     nodes, groups, edges = spec['nodes'], spec.get('groups', []), spec.get('edges', [])
@@ -314,6 +424,9 @@ def render_document(spec, base, target):
     panels=spec.get('panels',[])
     if spec['type']=='results' and not 1<=len(panels)<=6:
         raise ValueError('Use 1–6 panels answering distinct questions')
+    profile_panels = [p for p in panels if p.get('kind') == 'radar_grid']
+    if profile_panels and (len(panels) != 1 or not spec.get('size')):
+        raise ValueError('A radar grid occupies the whole figure; use a single panel and specify its final size')
     default_width = 3.55 if spec['type']=='results' and len(panels)==1 else 7.1
     width = _number(spec['size'][0]) if 'size' in spec else default_width
     cols = min(len(panels) or 1, 3, max(1, int(spec.get('columns', 2 if width >= 6 else 1))))
@@ -338,6 +451,11 @@ def render_document(spec, base, target):
                               x=.02,ha='left',fontsize=8,color='#495963')
             if spec['type']=='framework':
                 _framework(fig,spec,target)
+            elif spec['type']=='results' and profile_panels:
+                panel = profile_panels[0]
+                if not panel.get('question'):
+                    raise ValueError('Every panel needs a scientific question')
+                _profile_grid(fig, panel, _rows(base, panel))
             elif spec['type']=='results':
                 axes=fig.subplots(math.ceil(len(panels)/cols),cols,squeeze=False).flat
                 series_styles = {}

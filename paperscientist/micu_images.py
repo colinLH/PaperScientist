@@ -122,9 +122,10 @@ async def generate(settings, prompt):
     return data, endpoint
 
 
-def export_illustration(data, size, folder):
-    """Normalize pixels, strip provider metadata, and fit the PDF to the requested page."""
-    from matplotlib.figure import Figure
+def normalized_raster(data):
+    """Decode one bounded raster and strip embedded provider or camera metadata."""
+    if not 0 < len(data) <= MAX_IMAGE_BYTES:
+        raise ValueError("Image is empty or exceeds the size limit")
 
     try:
         with Image.open(io.BytesIO(data), formats=["PNG", "JPEG", "WEBP"]) as source:
@@ -134,6 +135,14 @@ def export_illustration(data, size, folder):
     except (UnidentifiedImageError, OSError, Image.DecompressionBombError):
         raise ValueError("MicuAPI response did not contain a valid PNG, JPEG or WebP image") from None
     image.info.clear()
+    return image
+
+
+def export_illustration(data, size, folder):
+    """Normalize pixels and fit the PDF to the requested page."""
+    from matplotlib.figure import Figure
+
+    image = normalized_raster(data)
     image.save(folder / "figure.png")
     figure = Figure(figsize=size)
     axes = figure.add_axes([0, 0, 1, 1])

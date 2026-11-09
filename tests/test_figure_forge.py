@@ -117,3 +117,33 @@ def test_builtin_skills_are_parseable_and_priority_entry_is_discoverable():
     assert not catalog.errors
     assert 'manuscript-quality' in catalog.skills
     assert catalog.search('论文画图',limit=1)['skills'][0]['name']=='figure-forge'
+
+
+def test_profile_grid_respects_planned_facets_missing_cells_and_shared_scale(tmp_path):
+    import matplotlib.pyplot as plt
+
+    data = tmp_path/'profiles.csv'
+    data.write_text('model,seed,series,metric,rate\nM,13,A,x,0\nM,13,A,y,70\nM,13,A,z,100\n'
+                    'M,13,B,x,0\nM,13,B,y,\n', encoding='utf-8')
+    panel = {'kind':'radar_grid','csv':'profiles.csv','question':'Are the working points comparable?',
+             'x':'metric','y':'rate','group':'series','facet_row':'model','facet_column':'seed',
+             'dimensions':['x','y','z'],'scale_max':100,'unit':'%', 'column_order':['13','42']}
+    rows = figure_render._rows(tmp_path, panel)
+    fig = plt.figure()
+    try:
+        figure_render._profile_grid(fig, panel, rows)
+        observed, empty = [a for a in fig.axes if a.name == 'polar']
+        assert observed.get_ylim() == empty.get_ylim() == (0, 100)
+        assert len(observed.patches) == 1   # only the complete series is filled
+        assert observed.lines[1].get_linestyle() == 'None'
+        assert observed.lines[1].get_ydata()[0] == 0
+        assert any(t.get_text() == 'No observations' for t in empty.texts)
+    finally:
+        plt.close(fig)
+    for bad, match in [(rows+[rows[0]], 'Duplicate'), ([{**rows[0],'rate':'101'}], 'outside')]:
+        fig = plt.figure()
+        try:
+            with pytest.raises(ValueError, match=match):
+                figure_render._profile_grid(fig, panel, bad)
+        finally:
+            plt.close(fig)
