@@ -83,6 +83,11 @@ class Store:
                 CREATE TABLE IF NOT EXISTS shares(
                     token TEXT PRIMARY KEY, user_id TEXT, session_id TEXT,
                     content TEXT, created_at TEXT);
+                CREATE TABLE IF NOT EXISTS experiment_jobs(
+                    session_id TEXT NOT NULL, name TEXT NOT NULL, run_id TEXT NOT NULL UNIQUE,
+                    spec TEXT NOT NULL, status TEXT NOT NULL, supervisor_pid INTEGER,
+                    cancel_requested INTEGER NOT NULL DEFAULT 0, updated TEXT NOT NULL, error TEXT NOT NULL DEFAULT '',
+                    PRIMARY KEY(session_id,name));
                 CREATE TABLE IF NOT EXISTS removed_items(
                     user_id TEXT, kind TEXT, target TEXT, PRIMARY KEY(user_id,kind,target));
             """)
@@ -123,7 +128,7 @@ class Store:
             row = db.execute("SELECT * FROM sessions WHERE id=?", (identifier(sid),)).fetchone()
         return dict(row) if row else None
 
-    def new_chat(self, project_id="default", user_id="local"):
+    def new_chat(self, project_id="default", user_id="local", *, dedicated=False):
         """Atomically reuse a genuinely unused root chat, including across clients."""
         identifier(project_id)
         identifier(user_id)
@@ -148,11 +153,13 @@ class Store:
                 AND NOT EXISTS(SELECT 1 FROM agents a WHERE a.id=s.id OR a.parent_id=s.id)
                 AND NOT EXISTS(SELECT 1 FROM removed_items r WHERE r.user_id=s.user_id AND r.kind='session' AND r.target=s.id)
                 AND NOT EXISTS(SELECT 1 FROM navigation n WHERE n.user_id=s.user_id AND n.kind='session'
-                    AND n.target=s.id AND json_extract(n.state,'$.archived')=1)
+                    AND n.target=s.id AND (json_extract(n.state,'$.archived')=1
+                    OR json_extract(n.state,'$.dedicated')=1 OR json_extract(n.state,'$.route') IS NOT NULL OR json_extract(n.state,'$.forked_from') IS NOT NULL))
             """
             if has_runs:
                 query += " AND NOT EXISTS(SELECT 1 FROM research_runs r WHERE r.session_id=s.id)"
-            for row in db.execute(query + " ORDER BY updated_at DESC, id", (user_id, project_id)).fetchall():
+            reusable = () if dedicated else db.execute(query + " ORDER BY updated_at DESC, id", (user_id, project_id))
+            for row in reusable:
                 folder = self.root / "workspaces" / row["id"]
                 # Uploaded or hand-written files are a draft too; never discard them.
                 try:
@@ -164,6 +171,8 @@ class Store:
             sid, stamp = uuid.uuid4().hex, now()
             db.execute("INSERT INTO sessions VALUES(?,?,?,?,?,?,?)",
                        (sid, user_id, project_id, None, "新研究对话", stamp, stamp))
+            if dedicated:
+                db.execute("INSERT INTO navigation VALUES(?,?,?,?)", (user_id, "session", sid, dumps({"dedicated": True})))
             return dict(db.execute("SELECT * FROM sessions WHERE id=?", (sid,)).fetchone())
 
     def sessions(self, user_id="local"):

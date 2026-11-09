@@ -14,6 +14,7 @@ STAGES = {
 TOOL_STAGES = {
     "set_research_direction": "idea", "search_papers": "literature", "read_paper": "literature",
     "download_paper": "literature", "record_evidence": "literature", "plan_benchmark": "design",
+    "start_experiment_job": "evaluation", "inspect_experiment_job": "evaluation",
     "run_benchmark": "evaluation", "record_benchmark_result": "evaluation",
     "record_experiment": "evaluation", "plot_results": "evaluation",
     "assemble_manuscript": "writing", "configure_manuscript_layout": "writing",

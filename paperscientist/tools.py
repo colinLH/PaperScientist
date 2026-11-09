@@ -168,6 +168,14 @@ class ToolSet:
             return {"event_id": event_id, "total_chars": len(raw), "content": raw[start:start+count], "next_offset": start+count if start+count < len(raw) else None}
 
         @tool
+        async def prepare_research_intake(objective: str, repository: str = "", revision: str = "",
+                                          paper: str = "", artifact_ids: list[str] | None = None,
+                                          source_paths: list[str] | None = None) -> dict:
+            """Freeze sources for a reproduction, continuation or research extension. Supply a public GitHub repo and optional ref, an arXiv URL or session PDF, and/or same-session artifact IDs. Returns the exact revision, entry points, paper copy and checked file hashes. Optional source_paths copies selected Git blobs at that commit for inspection. Source availability does not verify empirical results."""
+            from .intake import prepare_intake
+            return await prepare_intake(store, sid, objective, repository, revision, paper, artifact_ids or [], source_paths or [])
+
+        @tool
         def set_research_direction(direction: str, evidence_quote: str, confirmed: bool = False) -> dict:
             """Record a proposed or user-selected research direction. confirmed=true only when the exact user quote explicitly selects it."""
             evidence = self.memory.evidence(evidence_quote)
@@ -181,6 +189,27 @@ class ToolSet:
             if len({p.id for p in plan}) != len(plan) or len({c.id for c in claims}) != len(claims):
                 raise ValueError("Plan and claim IDs must be unique")
             return store.update_project(session, {"stage": stage, "plan": [p.model_dump() for p in plan], "claims": [c.model_dump() for c in claims]})
+
+        @tool
+        def research_baseline(action: Literal["list","export","attach","compare"], plan_id: str = "", run_id: str = "",
+                              source_session_id: str = "", artifact_id: str = "") -> dict:
+            """List your audited runs/attached references. Export a completed plan_id and run_id as an aggregate-only baseline, or attach an explicitly selected source_session_id and exported artifact_id from another project of the same user. Compare an attached artifact_id against independently measured local results. Keep reference scope and provenance in any report."""
+            from . import baseline_refs
+            if action == "list":
+                return baseline_refs.list_baselines(store,session)
+            if action == "export":
+                return baseline_refs.export_baseline(store,session,plan_id,run_id)
+            if action == "attach":
+                return baseline_refs.attach_baseline(store,session,source_session_id,artifact_id)
+            return baseline_refs.compare_reference(store,session,artifact_id)
+
+        @tool
+        def record_route_decision(revision: int, reason: str, status: Literal["exploring", "supported", "rejected", "stopped"],
+                                  outcome: str, next_step: str) -> dict:
+            """Record this session's research question, decision, observed evidence/limitations and next step. Cite available receipt IDs in outcome. Use the current research_route_notes revision (0 for a new route). Route decisions do not certify benchmark results or change run status."""
+            from .research_routes import update_route
+            return update_route(store, session["project_id"], sid, revision, {
+                "reason": reason, "status": status, "outcome": outcome, "next_step": next_step}, session["user_id"])
 
         @tool
         def record_evidence(claim_id: str, source_type: Literal["paper", "artifact"], source_id: str,
@@ -291,6 +320,24 @@ class ToolSet:
             return await artifacts.run_python(store, sid, path, cfg.allow_execution, timeout)
 
         @tool
+        def start_experiment_job(name: str, path: str, inputs: list[str] | None = None, timeout: int = 3600) -> dict:
+            """Start a trusted background Python experiment (up to 24h). Copy the script and named workspace input files into a separate working directory. Reuse a unique name on retries; inspect the job for logs, outputs and run_id."""
+            from .experiment_jobs import start_job
+            return start_job(store, sid, name, path, inputs or [], timeout, cfg.allow_execution)
+
+        @tool
+        def inspect_experiment_job(name: str = "", tail: int = 4000) -> dict:
+            """Read an experiment's status, stdout/stderr tail and output hashes; omit name to list this session's jobs. Reads never launch work."""
+            from .experiment_jobs import inspect_job
+            return inspect_job(store, sid, name, tail)
+
+        @tool
+        def stop_experiment_job(name: str) -> dict:
+            """Request cancellation of a background experiment in this session; inspect until terminal. Preserve its logs and working files."""
+            from .experiment_jobs import stop_job
+            return stop_job(store, sid, name)
+
+        @tool
         def record_experiment(claim_id: str, result_path: str, provenance: Literal["measured", "user_supplied", "synthetic"],
                               evaluation_question: str, run_id: str = "", notes: str = "") -> dict:
             """Register an existing CSV/JSON result and the question it answers. Measured results require a successful run and matching captured result hash."""
@@ -303,9 +350,8 @@ class ToolSet:
             if not parsed:
                 raise ValueError("Result file is empty")
             if provenance == "measured":
-                runs = [a for a in store.artifacts(sid) if a["kind"] == "execution"]
-                record = next((json.loads(Path(a["path"]).read_text(encoding="utf-8")) for a in runs
-                               if Path(a["path"]).stem == run_id), None)
+                from .benchmarks import execution_receipt
+                record = execution_receipt(store, sid, run_id)
                 if not record or record["exit_code"] != 0 or record["timed_out"]:
                     raise ValueError("Measured results require a successful recorded run_id")
                 if record.get("output_files", {}).get(result_path.replace("\\", "/")) != digest:
@@ -435,10 +481,10 @@ class ToolSet:
             return benchmarks.plan_benchmark(store, sid, benchmark_id, protocol, protocol_path)
 
         @tool
-        async def run_benchmark(plan_id: str) -> dict:
-            """Execute a frozen local benchmark adapter when execution is enabled, then validate results against run receipts and required coverage. A smoke/subset run is not an official full benchmark."""
+        async def run_benchmark(plan_id: str, background_name: str = "") -> dict:
+            """Execute a frozen local benchmark adapter when execution is enabled, then validate results against run receipts and required coverage. A smoke/subset run is not an official full benchmark. Use background_name for a detached run, inspect it by name and audit after completion. Budgets above 300 seconds always detach."""
             from . import benchmarks
-            return await benchmarks.run_benchmark(store, sid, plan_id, enabled=cfg.allow_execution)
+            return await benchmarks.run_benchmark(store, sid, plan_id, enabled=cfg.allow_execution, background_name=background_name)
 
         @tool
         def record_benchmark_result(plan_id: str, result_path: str, run_id: str) -> dict:
@@ -502,11 +548,13 @@ class ToolSet:
         result = [search_papers, web_search, fetch_url, read_paper, list_papers, recall_memory,
                   experience_recall, read_history, read_tool_result, list_skills, load_skill,
                   list_skill_resources, stage_skill,
-                  list_files, read_file, write_file, edit_file, run_python, record_experiment, search_figure_references, figure_forge, plot_results,
+                  list_files, read_file, write_file, edit_file, run_python, start_experiment_job, inspect_experiment_job, stop_experiment_job, record_experiment, search_figure_references, figure_forge, plot_results,
                   draw_framework, assemble_manuscript, review_manuscript, validate_manuscript, export_bundle, compile_latex, audit_research,
                   configure_manuscript_layout, validate_manuscript_layout, discover_benchmarks, collect_benchmark_source,
                   register_benchmark, plan_benchmark, run_benchmark, record_benchmark_result, audit_benchmarks]
         if not self.child:
+            if self.profile.name == "orchestrator" and not session.get("parent_id"):
+                result.extend([record_route_decision, research_baseline, prepare_research_intake])
             result.extend([remember, set_research_direction, update_research_plan, record_evidence])
         else:
             result.append(copy_parent_artifact)

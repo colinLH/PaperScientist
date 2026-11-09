@@ -51,6 +51,20 @@ PS_ALLOW_EXECUTION=false
 
 运行生成代码前，勾选 Web 中“允许运行工作区 Python / LaTeX”。这是在本机执行可信研究代码，**不是隔离沙箱**。默认只监听回环地址；此版本面向单人本地使用，没有多人服务的鉴权隔离。部署到公网前需要单独加入认证与容器隔离。
 
+## 从现有研究继续
+
+在同一个项目的「研究路线」里，可以从已有会话分叉，写下研究问题，并查看两条路线的登记文件、可比指标、样本数和实验编号。展开「跨项目基线」可以生成可复制的引用，也可以粘贴另一会话的引用并比较结果。「产物与图表」中的「后台实验」会显示当前会话和直属实验专家的运行日志。要复现具体结果，可在聊天中附论文 PDF、给出公开 GitHub 仓库和需要的文件，要求 Agent 固定材料后建立基线。
+
+也可以从终端连接已启动的本地工作台。以下例子固定 DeepScientist 的一次公开提交，读取其中的研究流程说明。
+
+```sh
+python -m paperscientist doctor
+python -m paperscientist start "根据已有实现整理可复现的研究流程" --repo https://github.com/ResearAI/DeepScientist --revision b36624417f0c6b8238ec02db37b94d6db2faa5b0 --source-path docs/en/06_RUNTIME_AND_CANVAS.md
+python -m paperscientist status <任务ID> --watch
+```
+
+启动后返回该任务的工作台链接。运行 `python -m paperscientist projects` 查看项目 ID，用 `--project` 将新任务放进指定项目。用 `--paper-file` 添加本地 PDF，或用 `--session` 在原会话上继续研究。任务等候输入时，`answer <任务ID> <问题ID> <答案>` 会把回答交回同一任务。运行本机 Python 需要显式启用执行权限。若要订阅飞书状态通知，在本机 `.env` 中填写 `PS_FEISHU_WEBHOOK` 及机器人要求的签名密钥，再运行 `python -m paperscientist feishu-watch <任务ID>` 并保持该终端运行。[工作流对照与验证方法](docs/deepscientist-comparison.md)
+
 ## 已实现的能力
 
 | 能力 | 实现 |

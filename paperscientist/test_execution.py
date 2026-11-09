@@ -14,10 +14,11 @@ import sys
 import unittest
 
 
-def execute(script_name, workspace_name, evidence_name):
+def execute(script_name, workspace_name, evidence_name, session_root=None):
     script, workspace, evidence = map(lambda name: Path(name).resolve(),
                                       (script_name, workspace_name, evidence_name))
-    if not script.is_relative_to(workspace) or not evidence.is_relative_to(workspace):
+    root = Path(session_root).resolve() if session_root else workspace
+    if not workspace.is_relative_to(root) or not script.is_relative_to(workspace) or not evidence.is_relative_to(root):
         raise ValueError('Execution and test evidence must stay within the workspace')
     observed, sources, pytest_runs = {}, {}, []
     pytest_depth = 0

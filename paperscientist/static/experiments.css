@@ -1,0 +1,20 @@
+.ps-jobs,.ps-experiment-log {color:#e3e9e6;min-width:0;font:inherit}
+.ps-jobs {padding:14px 16px;border:1px solid #424846;border-radius:10px;background:#202426;margin-bottom:12px}
+.ps-jobs header {display:flex;justify-content:space-between;align-items:center;gap:12px}
+.ps-jobs h3,.ps-jobs p,.ps-experiment-log h5 {margin:0}
+.ps-jobs > p:not(:empty),.ps-experiment-log small {color:#abb7bc;font-size:13px}
+.ps-jobs header button,.ps-jobs nav button {cursor:pointer;color:inherit;font:inherit}
+.ps-jobs header button {border:0;background:transparent}
+.ps-jobs nav {display:flex;flex-wrap:wrap;gap:6px;margin-top:9px;max-height:150px;overflow:auto}
+.ps-jobs nav:empty {display:none}
+.ps-jobs nav button {display:inline-flex;align-items:center;gap:7px;border:1px solid #48534e;border-radius:5px;background:transparent;padding:5px 9px;font-size:13px;overflow-wrap:anywhere}
+.ps-jobs nav button[aria-pressed=true] {border-color:#8fc7ae;background:#263831}
+.ps-jobs nav small {font:inherit;color:#a8c7ba}
+.ps-experiment-log {margin:12px 0 4px;border-top:1px solid #47504e;padding-top:10px}
+.ps-experiment-log small,.ps-experiment-log li {overflow-wrap:anywhere}
+.ps-experiment-log h5 {font-size:13px;font-weight:550;margin:9px 0 3px}
+.ps-experiment-log pre {background:#161a1b!important;color:#d9e1de!important;font:12px/1.6 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere;overflow:auto;max-height:210px;min-height:24px;border-radius:5px;padding:6px 8px;margin:0}
+.ps-experiment-log pre:empty::before {content:'暂无输出';color:#a7b1ae}
+.ps-experiment-log summary {cursor:pointer;color:#a6d6c2}
+.ps-experiment-log [hidden] {display:none!important}
+@media(max-width:720px){.ps-jobs{padding:12px}.ps-jobs nav button,.ps-jobs header button{min-height:38px}.ps-experiment-log pre{max-height:155px}}

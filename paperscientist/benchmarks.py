@@ -5,6 +5,7 @@ user-provided evaluator. Official suites must still use their official grader.
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import itertools
 import json
@@ -286,8 +287,8 @@ def plan_benchmark(store, sid, benchmark_id: str, protocol: dict | None = None, 
         if len(groups) * len(plan["methods"]) * len(plan["metrics"]) > 10000:
             raise ValueError("Grouped summary exceeds 10000 metric cells; use research-relevant categories rather than case identifiers")
     budget = plan.get("budget", {})
-    if type(budget.get("timeout_seconds")) is not int or not 1 <= budget["timeout_seconds"] <= 300:
-        raise ValueError("budget.timeout_seconds must be 1–300 (enforced by the local runner)")
+    if type(budget.get("timeout_seconds")) is not int or not 1 <= budget["timeout_seconds"] <= 86400:
+        raise ValueError("budget.timeout_seconds must be 1–86400 seconds (budgets over 300 seconds use the background runner)")
     expected = len(ids) * len(plan["methods"]) * len(plan["seeds"])
     if type(budget.get("max_evaluations")) is not int or not expected <= budget["max_evaluations"] <= 100_000:
         raise ValueError("budget.max_evaluations must cover the protocol and be <=100000")
@@ -379,12 +380,36 @@ def _plan(store, sid, plan_id):
     return plan
 
 
-def _execution(store, sid, plan, result_path, run_id, result_digest=None):
+def execution_receipt(store, sid, run_id):
+    """Read a registered execution receipt after checking its content hash."""
     identifier(run_id)
-    run = _verified_record(store, sid, f"runs/{run_id}.json", "execution")
+    return _verified_record(store, sid, f"runs/{run_id}.json", "execution")
+
+
+def benchmark_inputs(plan):
+    return {plan["script_path"]: plan["script_sha256"], plan["dataset_path"]: plan["dataset_sha256"],
+            plan["manifest_path"]: plan["manifest_sha256"], **plan.get("input_sha256", {})}
+
+
+def execution_path(run, relative):
+    folder = run.get("execution_dir")
+    if not folder:
+        return relative
+    if folder != f"background-experiments/{run['run_id']}":
+        raise ValueError("Unexpected benchmark execution directory")
+    return f"{folder}/{relative}"
+
+
+def _execution(store, sid, plan, result_path, run_id, result_digest=None):
+    run = execution_receipt(store, sid, run_id)
     if run.get("run_id") != run_id or run.get("exit_code") != 0 or run.get("timed_out"):
         raise ValueError("Evaluation requires a successful non-timeout execution")
-    if run.get("script") != plan["script_path"] or run.get("script_sha256") != plan["script_sha256"]:
+    if result_path != execution_path(run, plan["result_path"]):
+        raise ValueError("Result path differs from the frozen protocol")
+    if run.get("execution_dir") and any(run.get("frozen_inputs", {}).get(path) != digest
+                                        for path, digest in benchmark_inputs(plan).items()):
+        raise ValueError("Background run did not use the frozen benchmark inputs")
+    if run.get("script") != execution_path(run, plan["script_path"]) or run.get("script_sha256") != plan["script_sha256"]:
         raise ValueError("Execution did not use the frozen evaluator script")
     # Existing runner IDs encode start time, preventing post-hoc protocol creation.
     if not re.fullmatch(r"run_\d+", run_id) or int(run_id[4:]) <= plan["created_ns"]:
@@ -517,8 +542,6 @@ def _evaluate(store, sid, plan, result_path):
 def record_benchmark_result(store, sid, plan_id: str, result_path: str, run_id: str):
     plan = _plan(store, sid, plan_id)
     result_path = str(store.file(sid, result_path).relative_to(store.workspace(sid))).replace("\\", "/")
-    if result_path != plan["result_path"]:
-        raise ValueError("Result path differs from the frozen protocol")
     _execution(store, sid, plan, result_path, run_id)
     summary = _evaluate(store, sid, plan, result_path)
     manifest = _verified_record(store, sid, plan["manifest_path"], "benchmark_manifest")
@@ -535,11 +558,23 @@ def record_benchmark_result(store, sid, plan_id: str, result_path: str, run_id: 
     return _save(store, sid, f"benchmarks/results/{plan_id}/{result_id}.json", record, "benchmark_result")
 
 
-async def run_benchmark(store, sid, plan_id: str, enabled: bool):
+async def run_benchmark(store, sid, plan_id: str, enabled: bool, background_name: str = ""):
     plan = _plan(store, sid, plan_id)
     if not enabled:
         raise PermissionError("Local execution must be enabled to run a benchmark")
-    run = await run_python(store, sid, plan["script_path"], enabled=True, timeout=plan["budget"]["timeout_seconds"])
+    timeout = plan["budget"]["timeout_seconds"]
+    if background_name or timeout > 300:
+        from .experiment_jobs import start_job
+        files = [*benchmark_inputs(plan), f"benchmarks/plans/{plan_id}.json"]
+        job = await asyncio.to_thread(start_job, store, sid, background_name or plan_id, plan["script_path"],
+                                      files, timeout, enabled, benchmark_plan=plan_id)
+        return {"plan_id": plan_id, "job": job, "status": job["status"]}
+    run = await run_python(store, sid, plan["script_path"], enabled=True, timeout=timeout)
+    return finish_benchmark(store, sid, plan, run)
+
+
+def finish_benchmark(store, sid, plan, run):
+    plan_id = plan["plan_id"]
     attempt = _save(store, sid, f"benchmarks/attempts/{plan_id}/{run['run_id']}.json", {
         "plan_id": plan_id, "benchmark_id": plan["benchmark_id"], "run_id": run["run_id"], "created_at": now(),
         "exit_code": run.get("exit_code"), "timed_out": bool(run.get("timed_out")),
@@ -547,7 +582,7 @@ async def run_benchmark(store, sid, plan_id: str, enabled: bool):
     }, "benchmark_attempt")
     if run.get("exit_code") != 0 or run.get("timed_out"):
         return {"plan_id": plan_id, "status": "execution_failed", "execution": run, "attempt": attempt, "protocol_complete": False}
-    return record_benchmark_result(store, sid, plan_id, plan["result_path"], run["run_id"])
+    return record_benchmark_result(store, sid, plan_id, execution_path(run, plan["result_path"]), run["run_id"])
 
 
 def audit_benchmarks(store, sid):

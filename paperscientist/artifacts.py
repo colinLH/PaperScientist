@@ -7,6 +7,7 @@ import json
 import math
 import os
 import shutil
+import signal
 import sys
 import time
 from pathlib import Path
@@ -15,30 +16,46 @@ from .store import dumps
 from .process_job import ProcessJob
 
 
-async def run_python(store, sid, path, enabled, timeout=120):
+def python_environment():
+    # Child processes receive only the local execution environment, not provider credentials.
+    allowed = {"SYSTEMROOT", "WINDIR", "PATH", "TEMP", "TMP", "HOME", "USERPROFILE", "LANG", "CONDA_PREFIX"}
+    env = {k: v for k, v in os.environ.items() if k.upper() in allowed}
+    return {**env, "PYTHONIOENCODING": "utf-8", "MPLBACKEND": "Agg"}
+
+
+def log_tail(path, limit=12000):
+    if not path.exists():
+        return ""
+    with path.open("rb") as f:
+        f.seek(max(0, f.seek(0, os.SEEK_END) - limit * 4))
+        return f.read().decode("utf-8", errors="replace")[-limit:]
+
+
+async def run_python(store, sid, path, enabled, timeout=120, *, job_run_id=None, execution_dir=None, frozen_inputs=None):
     if not enabled:
         raise PermissionError("Python execution is disabled. Enable it in Web settings or PS_ALLOW_EXECUTION=true for trusted local work.")
     script = store.file(sid, path)
     if script.suffix != ".py" or not script.is_file():
         raise ValueError("Select an existing .py file in the session workspace")
-    timeout = max(1, min(timeout, 300))
+    root = store.workspace(sid)
+    workdir = store.file(sid, execution_dir) if execution_dir else root
+    if not script.is_relative_to(workdir):
+        raise ValueError("Script must belong to the execution directory")
+    timeout = max(1, min(timeout, 86400 if execution_dir else 300))
     script_hash = hashlib.sha256(script.read_bytes()).hexdigest()
-    # Explicitly omit all API keys, tokens and database credentials from child env.
-    allowed = {"SYSTEMROOT", "WINDIR", "PATH", "TEMP", "TMP", "HOME", "USERPROFILE", "LANG", "CONDA_PREFIX"}
-    env = {k: v for k, v in os.environ.items() if k.upper() in allowed}
-    env.update(PYTHONIOENCODING="utf-8", MPLBACKEND="Agg")
+    env = python_environment()
     out_dir = store.workspace(sid) / "runs"
     out_dir.mkdir(exist_ok=True)
-    run_id = f"run_{time.time_ns()}"
+    run_id = job_run_id or f"run_{time.time_ns()}"
     stdout_path, stderr_path = out_dir / f"{run_id}.stdout.txt", out_dir / f"{run_id}.stderr.txt"
     test_evidence = out_dir / f"{run_id}.tests.json"
     started = time.monotonic()
     def result_snapshot():
-        root = store.workspace(sid)
         return {str(p.relative_to(root)).replace("\\", "/"): (p.stat().st_mtime_ns, hashlib.sha256(p.read_bytes()).hexdigest())
-                for p in root.rglob("*") if p.is_file() and p.suffix.lower() in {
+                for p in workdir.rglob("*") if p.is_file() and p.suffix.lower() in {
                     ".csv", ".json", ".png", ".pdf", ".svg", ".jpg", ".jpeg", ".tex", ".bib", ".md", ".txt", ".py"}
-                and p.resolve().is_relative_to(root.resolve())
+                and p.resolve().is_relative_to(workdir)
+                and (execution_dir is not None or p.relative_to(root).parts[0] != "background-experiments")
                 and not {".git", "__pycache__", ".ui-cache", ".zig-cache", ".pytest_cache", "localappdata", "wheels"}.intersection(p.relative_to(root).parts)
                 and p.stat().st_size <= 20_000_000 and not p.is_relative_to(out_dir)}
     before = result_snapshot()
@@ -46,27 +63,32 @@ async def run_python(store, sid, path, enabled, timeout=120):
     with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
         observer_path = str(Path(__file__).with_name('test_execution.py').resolve())
         runner = f"import runpy,sys;worker=runpy.run_path({observer_path!r});worker['execute'](*sys.argv[1:])"
-        proc = await asyncio.create_subprocess_exec(sys.executable, "-I", "-c", runner, str(script), str(store.workspace(sid)), str(test_evidence),
-            cwd=store.workspace(sid), env=env, stdout=stdout, stderr=stderr)
+        proc = await asyncio.create_subprocess_exec(sys.executable, "-I", "-u", "-c", runner, str(script), str(workdir), str(test_evidence), str(root),
+            cwd=workdir, env=env, stdout=stdout, stderr=stderr, start_new_session=os.name != "nt")
         job = None
         try:
             job = ProcessJob(proc.pid)
             await asyncio.wait_for(proc.wait(), timeout)
         except asyncio.TimeoutError:
             timed_out = True
-            proc.kill()
-            await proc.wait()
-        except BaseException:
-            proc.kill()
-            await proc.wait()
-            raise
         finally:
+            # Include descendants (e.g. a data loader) when the script exits or is cancelled.
+            if os.name != "nt":
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            elif proc.returncode is None:
+                proc.kill()
             if job:
                 job.close()
+            await proc.wait()
     record = {"run_id": run_id, "script": path, "script_sha256": script_hash,
               "exit_code": proc.returncode, "timed_out": timed_out, "duration_seconds": round(time.monotonic() - started, 3),
-              "stdout": stdout_path.read_text(encoding="utf-8", errors="replace")[-12000:],
-              "stderr": stderr_path.read_text(encoding="utf-8", errors="replace")[-12000:]}
+              "stdout": log_tail(stdout_path),
+              "stderr": log_tail(stderr_path)}
+    if execution_dir:
+        record.update(execution_dir=execution_dir, frozen_inputs=frozen_inputs)
     record['input_source_hashes'] = {name:digest for name,(_,digest) in before.items() if name.endswith('.py')}
     record['unit_tests'] = (json.loads(test_evidence.read_text(encoding='utf-8')) if test_evidence.is_file()
                             else {'observer':'unavailable', 'tests':0, 'successful':False})

@@ -53,7 +53,9 @@ profiles:
     description: Main research coordinator and direct user requests
     prompt: Coordinate substantial stages using the relevant specialists. Integrate evidence and artifact IDs, reconcile
       conflicting results, and ask the user when a key decision is missing. Direct simple user requests may use
-      available native tools. Delegate parallel independent subtasks and inspect outputs before importing them.
+      available native tools. For work that starts from an identified repository, paper or prior output,
+      use prepare_research_intake to pin the starting materials. Reuse a supplied intake packet.
+      Delegate parallel independent subtasks and inspect outputs before importing them.
     tools:
     - '*'
     skills:
@@ -209,6 +211,9 @@ profiles:
     - read_paper
     - read_tool_result
     - run_python
+    - start_experiment_job
+    - inspect_experiment_job
+    - stop_experiment_job
     - search_figure_references
     - search_papers
     - send_message
@@ -276,6 +281,9 @@ profiles:
     - register_benchmark
     - run_benchmark
     - run_python
+    - start_experiment_job
+    - inspect_experiment_job
+    - stop_experiment_job
     - search_figure_references
     - search_papers
     - send_message

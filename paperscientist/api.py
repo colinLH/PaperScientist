@@ -29,6 +29,15 @@ class ProjectRequest(BaseModel):
     folder_path: str | None = Field(default=None, max_length=4096)
 
 
+class IntakeRequest(BaseModel):
+    objective: str = Field(min_length=1, max_length=16000)
+    repository: str = ""
+    revision: str = ""
+    paper: str = ""
+    artifact_ids: list[str] = Field(default_factory=list, max_length=20)
+    source_paths: list[str] = Field(default_factory=list, max_length=20)
+
+
 class RunRequest(ChatRequest):
     continuous: bool = True
     max_steps: int = Field(default=60, ge=1, le=100)
@@ -85,6 +94,10 @@ def create_app(settings=None, service=None, with_ui=True):
     from .timeline_api import mount_timeline_api
     mount_timeline_api(app, service)
     workspace_actions = WorkspaceActions(service)
+    from .experiment_jobs_api import mount_experiment_jobs_api
+    mount_experiment_jobs_api(app, workspace_actions)
+    from .routes_api import mount_routes_api
+    mount_routes_api(app, workspace_actions)
 
     @app.post("/api/workspace/action")
     async def workspace_action(body: WorkspaceActionRequest):
@@ -167,9 +180,9 @@ def create_app(settings=None, service=None, with_ui=True):
             raise HTTPException(400, str(exc)) from exc
 
     @app.post("/api/sessions")
-    def new_session(project_id: str = "default"):
+    def new_session(project_id: str = "default", dedicated: bool = False):
         try:
-            return service.store.new_chat(project_id=project_id)
+            return service.store.new_chat(project_id=project_id, dedicated=dedicated)
         except ValueError as exc:
             raise HTTPException(400,str(exc)) from exc
 
@@ -179,6 +192,19 @@ def create_app(settings=None, service=None, with_ui=True):
             return snapshot(service,sid)
         except ValueError as exc:
             raise HTTPException(404,str(exc)) from exc
+
+    @app.post("/api/sessions/{sid}/intake")
+    async def session_intake(sid: str, body: IntakeRequest):
+        from .intake import prepare_intake
+
+        try:
+            workspace_actions.target("session", sid)
+        except ValueError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        try:
+            return await prepare_intake(service.store, sid, **body.model_dump())
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
 
     @app.post("/api/sessions/{sid}/runs")
     async def start_run(sid: str, body: RunRequest):

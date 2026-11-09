@@ -98,7 +98,7 @@ def mount_timeline_api(app, service):
 
     @app.get('/api/ui/{asset}')
     async def asset(asset: str):
-        if asset not in {'timeline.js', 'timeline.css', 'projects.js', 'projects.css'}:
+        if asset not in {'timeline.js', 'timeline.css', 'projects.js', 'projects.css', 'routes.js', 'routes.css', 'experiments.js', 'experiments.css'}:
             raise HTTPException(404)
         return FileResponse(Path(__file__).parent / 'static' / asset, headers={'Cache-Control': 'no-cache'})
 

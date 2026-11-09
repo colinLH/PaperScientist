@@ -273,7 +273,19 @@ export function mount(element){
   async function openTool(item){
     const {body,token,signal}=openDialog(item.name);
     if(!item.detail_event_id&&!item.detail_message_id){body.textContent=item.status==='running'?'工具正在运行，完成后可查看返回结果。':'这条历史工具记录没有可用的结果。';return;}
-    try{const r=await request(url('tool-detail',{event_id:item.detail_event_id||0,message_id:item.detail_message_id||0}),{signal});if(token!==dialogRequest)return;body.replaceChildren(el('pre','',r.text));if(r.truncated)body.prepend(el('p','ps-note','预览已截取前 200,000 个字符'));}catch(e){if(token===dialogRequest)body.textContent=e.message;}
+    try{
+      const r=await request(url('tool-detail',{event_id:item.detail_event_id||0,message_id:item.detail_message_id||0}),{signal});
+      if(token!==dialogRequest)return;
+      body.replaceChildren(el('pre','',r.text));
+      if(['start_experiment_job','inspect_experiment_job','stop_experiment_job'].includes(item.name)){
+        let result;try{const detail=JSON.parse(r.text);result=detail.result || detail;}catch{}
+        if(typeof result?.run_id==='string'){
+          const {watchLog}=await import('/api/ui/experiments.js?v=1');
+          if(token===dialogRequest)watchLog(body,sid,result.run_id,signal);
+        }
+      }
+      if(r.truncated && token===dialogRequest)body.prepend(el('p','ps-note','预览已截取前 200,000 个字符'));
+    }catch(e){if(token===dialogRequest)body.textContent=e.message;}
   }
   async function openDiff(turn,path){
     const {body,toolbar,token,signal}=openDialog('文件变更');

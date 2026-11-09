@@ -23,3 +23,5 @@ For method-specific engineering, search the orchestra skill source and load only
 This bounded iteration/synthesis pattern is inspired by Orchestra Research's autoresearch:
 https://github.com/Orchestra-Research/AI-Research-SKILLs/tree/773a52944ba4747a18bd4ae9ade53fff041adcbc/0-autoresearch-skill
 The upstream continuity hooks and host-specific control commands are not part of this adapter.
+
+For a reproduction or continuation, reuse the intake packet named in the task. When the user supplies a public GitHub repository, a paper or registered prior results without a packet, call `prepare_research_intake` through a profile that has it. Read the pinned revision's entry points, the saved PDF and the state of any selected prior artifacts. A matching hash establishes that the registered bytes are unchanged. Before using them as a baseline, check the protocol, split, evaluator and run receipt. Record the next discriminating experiment in the existing research plan.

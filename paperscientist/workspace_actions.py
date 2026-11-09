@@ -1,6 +1,7 @@
 """Persistent local workspace operations, shared by the web UI and HTTP API."""
 from __future__ import annotations
 
+import asyncio
 import html
 import json
 import shutil
@@ -70,7 +71,13 @@ class WorkspaceActions:
                 return ids
             ids |= children
 
+    def require_idle_experiments(self, ids):
+        from .experiment_jobs import active_jobs
+        if any(active_jobs(self.store, sid) for sid in ids):
+            raise ValueError("后台实验正在运行，请等待完成或先停止实验")
+
     async def quiesce(self, ids):
+        self.require_idle_experiments(ids)
         for sid in ids:
             await self.service.runs.stop(sid)
             await self.service.cancel_turn(sid)
@@ -78,6 +85,7 @@ class WorkspaceActions:
             lock = self.service.locks.get(sid)
             if lock and lock.locked():
                 raise ValueError("对话正在运行，请停止后再操作")
+        self.require_idle_experiments(ids)
 
     async def execute(self, kind, target, action, value="", confirmed=False):
         item = self.target(kind, target)
@@ -119,11 +127,7 @@ class WorkspaceActions:
             await self.service.runs.purge(ids)
             result.update(note="已永久删除", affected=list(ids))
         elif action == "fork" and kind == "session":
-            if state.get("archived") or self.metadata("project", item["project_id"]).get("archived"):
-                raise ValueError("请先恢复归档，再创建分叉")
-            if self.service.locks.get(target) and self.service.locks[target].locked():
-                raise ValueError("请先停止当前回答，再分叉完整历史")
-            sid = self.fork(item, empty=value == "empty")
+            sid = await self.fork_idle(item, empty=value == "empty")
             result.update(note="已打开空白对话 · 共享原项目记忆" if value == "empty" else "已创建独立分叉 · 共享原项目记忆", navigate=sid)
         elif action == "share" and kind == "session":
             content = self.transcript(target)
@@ -157,14 +161,26 @@ class WorkspaceActions:
             raise ValueError("工作区含链接目录或文件，请先移除链接再操作")
         return path
 
-    def fork(self, source, empty=False):
+    async def fork_idle(self, source, empty=False, reason=""):
+        sid = source["id"]
+        if self.metadata("session", sid).get("archived") or self.metadata("project", source["project_id"]).get("archived"):
+            raise ValueError("请先恢复归档，再创建分叉")
+        lock = self.service.locks.setdefault(sid, asyncio.Lock())
+        if lock.locked():
+            raise ValueError("请等当前回答结束再分叉")
+        async with lock:
+            if not empty:
+                self.require_idle_experiments([sid])
+            return await asyncio.to_thread(self.fork, source, empty, reason)
+
+    def fork(self, source, empty=False, reason=""):
         if empty:
             return self.store.new_chat(project_id=source["project_id"])["id"]
         sid, old = uuid.uuid4().hex, source["id"]
         src, dest = self.checked_workspace(old), self.checked_workspace(sid)
-        if not empty and src.exists():
-            shutil.copytree(src, dest)
         try:
+            if src.exists():
+                shutil.copytree(src, dest)
             self.store.session(sid, project_id=source["project_id"])
             with self.store.connect() as db:
                 if not empty:
@@ -186,7 +202,13 @@ class WorkspaceActions:
                             db.execute("INSERT INTO artifacts VALUES(?,?,?,?,?,?)", (uuid.uuid4().hex, sid, str(new_path), a["kind"], dumps({**a["metadata"], "forked_from": a["id"]}), now()))
                 db.execute("UPDATE sessions SET title=? WHERE id=?", (source["title"] + " · 分叉", sid))
                 db.execute("INSERT INTO events(session_id,kind,data,created_at) VALUES(?,?,?,?)", (sid, "session_title", dumps({"source": "fork"}), now()))
-                db.execute("INSERT INTO navigation VALUES('local','session',?,?)", (sid, dumps({"forked_from": old})))
+                nav = {"forked_from": old}
+                if reason:
+                    from .research_routes import EMPTY_NOTE
+                    nav["route"] = {**EMPTY_NOTE, "reason": reason, "revision": 1}
+                    db.execute("INSERT INTO events(session_id,kind,data,created_at) VALUES(?,?,?,?)",
+                               (sid, "research_route", dumps(nav["route"]), now()))
+                db.execute("INSERT INTO navigation VALUES('local','session',?,?)", (sid, dumps(nav)))
         except Exception:
             with self.store.connect() as db:
                 db.execute("DELETE FROM sessions WHERE id=?", (sid,))
@@ -224,7 +246,7 @@ class WorkspaceActions:
                         memory_ids.add(row["id"])
                 db.executemany("DELETE FROM memories WHERE id=?", [(mid,) for mid in memory_ids])
                 for sid in ids:
-                    for table in ("messages", "events", "checkpoints", "artifacts", "shares"):
+                    for table in ("messages", "events", "checkpoints", "artifacts", "shares", "experiment_jobs"):
                         db.execute(f"DELETE FROM {table} WHERE session_id=?", (sid,))
                     db.execute("DELETE FROM agents WHERE id=? OR parent_id=?", (sid, sid))
                     db.execute("DELETE FROM sessions WHERE id=?", (sid,))

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import uuid
+from html import escape
 from pathlib import Path
 
 import gradio as gr
@@ -89,6 +90,9 @@ def mount_ui(app, service):
                             execution = gr.Checkbox(value=service.settings.allow_execution, label="允许运行工作区 Python / LaTeX")
                             continuous = gr.Checkbox(value=True, label="持续执行研究任务，遇到关键决策时暂停提问")
                             gr.Markdown("使用本机 Python 执行研究代码。模型选择对下一轮生效。")
+                    with gr.Tab("研究路线", id="routes"):
+                        routes = gr.HTML("", elem_id="project-routes", apply_default_css=False,
+                                         js_on_load="import('/api/ui/routes.js?v=1').then(m => m.mount(element));")
                     with gr.Tab("项目记忆", id="memory"):
                         memory_cards = gr.HTML()
                         with gr.Accordion("画像、来源与记忆版本", open=False):
@@ -100,6 +104,8 @@ def mount_ui(app, service):
                     with gr.Tab("子代理"):
                         agents = gr.JSON(label="任务、状态与结果")
                     with gr.Tab("产物与图表"):
+                        experiments = gr.HTML("", elem_id="workspace-experiments", apply_default_css=False,
+                                              js_on_load="import('/api/ui/experiments.js?v=1').then(m => m.mount(element));")
                         files = gr.File(label="下载论文与产物（论文优先，最近 80 项；完整结果见复现包）", file_count="multiple", interactive=False, height=220)
                         figures = gr.Gallery(label="图表预览", columns=2, rows=2, height=420, object_fit="contain", interactive=False)
                     with gr.Tab("技能库"):
@@ -146,7 +152,7 @@ def mount_ui(app, service):
         args = [query, session_id, project_id, model, api_key, execution, pending, view, continuous]
         event = send.click(submit, args, outputs, concurrency_limit=8, show_progress="hidden")
         enter_event = query.submit(submit, args, outputs, concurrency_limit=8, show_progress="hidden")
-        reset_outputs = [session_id, project_id, chat, status, *panel_outputs, revision, heading, query, pending, chips, clear_files, *controls, progress, tabs]
+        reset_outputs = [session_id, project_id, chat, status, *panel_outputs, revision, heading, query, pending, chips, clear_files, *controls, progress, routes, experiments, tabs]
 
         def reset(sid, pid, note):
             if service.store.get_session(sid):
@@ -155,7 +161,10 @@ def mount_ui(app, service):
             run = service.runs.db.latest(sid)
             busy = bool(run and run['status'] in {'queued', 'running', 'recovering', 'waiting_input'})
             buttons = control_updates(busy, is_archived)
-            return sid, pid, timeline_mount(sid), note, *panels(sid, pid), uuid.uuid4().hex, workspace.heading(sid, pid), gr.update(value="", interactive=not is_archived), [], "", gr.skip(), *buttons, workflow_html(session_workflow(service.store, sid, run)), gr.update(selected="chat")
+            route_context = (f'<span class="ps-route-context" hidden data-project="{escape(pid, quote=True)}" '
+                             f'data-session="{escape(sid, quote=True)}"></span>')
+            experiment_context = f'<span class="ps-job-context" hidden data-session="{escape(sid, quote=True)}"></span>'
+            return sid, pid, timeline_mount(sid), note, *panels(sid, pid), uuid.uuid4().hex, workspace.heading(sid, pid), gr.update(value="", interactive=not is_archived), [], "", gr.skip(), *buttons, workflow_html(session_workflow(service.store, sid, run)), route_context, experiment_context, gr.update(selected="chat")
 
         async def new_session(pid, previous_sid, view_state):
             view_state["generation"] += 1
